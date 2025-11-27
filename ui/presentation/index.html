@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>MCPilot • Live Presentation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- GSAP + ScrollTrigger -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
+  <!-- App -->
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <!-- Progress -->
+  <div id="progress"><span></span></div>
+
+  <!-- Floating Background Canvas (particles) -->
+  <canvas id="bgfx" aria-hidden="true"></canvas>
+
+  <!-- Topbar -->
+  <header class="topbar glass">
+    <div class="brand">
+      <div class="gem"></div>
+      <div>
+        <h1>MCPilot</h1>
+        <small>Conversational Data Copilot</small>
+      </div>
+    </div>
+    <nav class="quicknav">
+      <a href="#intro">Intro</a>
+      <a href="#problem">Problem</a>
+      <a href="#solution">Solution</a>
+      <a href="#arch">Architecture</a>
+      <a href="#metrics">Value</a>
+      <a href="#demo">Demo</a>
+      <a href="#roadmap">Roadmap</a>
+      <a href="#contact">Contact</a>
+      <a class="cta" href="/ui" target="_blank" rel="noopener noreferrer">Open App</a>
+    </nav>
+  </header>
+
+  <main id="deck">
+    <!-- INTRO -->
+    <section id="intro" class="slide hero">
+      <div class="container center">
+        <h2 class="kicker">Live Presentation</h2>
+        <h1 class="title xl">
+          MCPilot <span class="accent">Data Copilot</span>
+        </h1>
+        <p class="subtitle lg">
+          Ask questions. Generate SQL &amp; Cypher. Visualize answers—with governance.
+        </p>
+        <div class="cta-row">
+          <a class="btn magnet" href="/ui" target="_blank" rel="noopener noreferrer">Launch App</a>
+          <a class="btn ghost magnet" href="#solution">See How It Works</a>
+        </div>
+      </div>
+      <div class="blob one"></div>
+      <div class="blob two"></div>
+    </section>
+
+    <!-- PROBLEM -->
+    <section id="problem" class="slide sticky">
+      <div class="container two">
+        <div class="card lift">
+          <h2 class="xxl">The Problem</h2>
+          <ul class="big">
+            <li>Business users &amp; “naive developers” don’t speak SQL or know the schema.</li>
+            <li>Downstream teams raise tickets to upstream data owners just to get basic answers.</li>
+            <li>Days are lost waiting on queries instead of acting on insights.</li>
+          </ul>
+        </div>
+        <div class="col stack">
+          <div class="card lift">
+            <h3>Symptoms</h3>
+            <ul>
+              <li>Ticket ping-pong between business, data engineering, and analytics.</li>
+              <li>Context split across graphs, tables, and dashboards.</li>
+              <li>Time-to-answer measured in days, not minutes.</li>
+            </ul>
+          </div>
+          <div class="card lift">
+            <h3>Opportunity</h3>
+            <p>
+              Let business users type questions in natural language (NLP) and “boom”—
+              MCPilot orchestrates graph + SQL, applies governance, and returns trusted answers.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SOLUTION -->
+    <section id="solution" class="slide">
+      <div class="container center">
+        <h2 class="xxl">Our Solution</h2>
+        <p class="lead lg">
+          Auto-generate Cypher &amp; SQL from natural language, validate with a semantic model,
+          and visualize results beautifully—all inside this live deck.
+        </p>
+        <div class="chips">
+          <div class="chip">GraphRAG (Neo4j)</div>
+          <div class="chip">Semantic SQL</div>
+          <div class="chip">LLM Orchestration</div>
+          <div class="chip">Governed Outputs</div>
+          <div class="chip">In-Product Presentation</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ARCHITECTURE -->
+    <section id="arch" class="slide">
+      <div class="container">
+        <h2 class="xxl center">Architecture</h2>
+        <div class="arch glass">
+          <svg viewBox="0 0 1100 520" class="archsvg" aria-label="MCPilot Architecture">
+            <defs>
+              <linearGradient id="g1" x1="0" x2="1">
+                <stop offset="0%" stop-color="#4cc9f0"/>
+                <stop offset="100%" stop-color="#4361ee"/>
+              </linearGradient>
+              <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="#8fbfff" />
+              </marker>
+            </defs>
+
+            <!-- Blocks -->
+            <g id="b-ui" class="blk">
+              <rect x="40" y="50" width="300" height="150" rx="18" class="b1"/>
+              <text x="190" y="110" text-anchor="middle">UI</text>
+              <text x="190" y="135" text-anchor="middle">Chat + Presentation</text>
+            </g>
+
+            <g id="b-api" class="blk">
+              <rect x="400" y="50" width="300" height="150" rx="18" class="b2"/>
+              <text x="550" y="100" text-anchor="middle">FastAPI</text>
+              <text x="550" y="130" text-anchor="middle">/ask-sql • /ask • /viz • /presentation</text>
+            </g>
+
+            <g id="b-llm" class="blk">
+              <rect x="760" y="50" width="300" height="150" rx="18" class="b3"/>
+              <text x="910" y="100" text-anchor="middle">LLM Gateway</text>
+              <text x="910" y="130" text-anchor="middle">Capgemini / Bedrock models</text>
+            </g>
+
+            <g id="b-sql" class="blk">
+              <rect x="40" y="300" width="300" height="170" rx="18" class="b1"/>
+              <text x="190" y="360" text-anchor="middle">Cortex SQL</text>
+              <text x="190" y="385" text-anchor="middle">Semantic YAML → SQL</text>
+            </g>
+
+            <g id="b-graph" class="blk">
+              <rect x="400" y="300" width="300" height="170" rx="18" class="b2"/>
+              <text x="550" y="360" text-anchor="middle">GraphRAG</text>
+              <text x="550" y="385" text-anchor="middle">Cypher gen + reasoning</text>
+            </g>
+
+            <g id="b-data" class="blk">
+              <rect x="760" y="300" width="300" height="170" rx="18" class="b3"/>
+              <text x="910" y="360" text-anchor="middle">Data Layer</text>
+              <text x="910" y="385" text-anchor="middle">Neo4j • SQLite / Snowflake</text>
+            </g>
+
+            <!-- Edges -->
+            <line x1="340" y1="125" x2="400" y2="125" class="edge" marker-end="url(#arrow)"/>
+            <line x1="700" y1="125" x2="760" y2="125" class="edge" marker-end="url(#arrow)"/>
+            <line x1="550" y1="200" x2="550" y2="300" class="edge" marker-end="url(#arrow)"/>
+            <line x1="190" y1="200" x2="190" y2="300" class="edge" marker-end="url(#arrow)"/>
+            <line x1="700" y1="385" x2="760" y2="385" class="edge" marker-end="url(#arrow)"/>
+            <line x1="340" y1="385" x2="400" y2="385" class="edge" marker-end="url(#arrow)"/>
+          </svg>
+        </div>
+        <!-- <p class="hint center">Blocks pop in; arrows pulse to show request flow.</p> -->
+      </div>
+    </section>
+
+    <!-- VALUE METRICS -->
+    <section id="metrics" class="slide">
+        <div class="container center">
+            <h2 class="xxl">Value &amp; Quality</h2>
+            <p class="lead">
+            Target quality metrics and unit economics for MCPilot vs. “Snowflake-style” stacks.
+            </p>
+
+            <div class="metrics-grid">
+            <div class="metric card">
+                <div class="label">Answer Accuracy</div>
+                <div class="value">
+                <span class="counter" data-target="93" data-suffix="%">0</span>
+                </div>
+                <small>on curated evaluation set</small>
+            </div>
+
+            <div class="metric card">
+                <div class="label">Precision / Relevance</div>
+                <div class="value">
+                <span class="counter" data-target="88" data-suffix="%">0</span>
+                </div>
+                <small>answers that are on-topic &amp; correct</small>
+            </div>
+
+            <div class="metric card">
+                <div class="label">Human Feedback Coverage</div>
+                <div class="value">
+                <span class="counter" data-target="100" data-suffix="%">0</span>
+                </div>
+                <small>of prod queries loggable / reviewable</small>
+            </div>
+
+            <!-- FLIP CARD -->
+            <div class="metric card savings flip-card" id="cost-card">
+                <div class="flip-inner">
+                <!-- Front -->
+                <div class="flip-face front">
+                    <div class="label">Savings / 1M Requests</div>
+                    <div class="value">
+                    <span class="counter" data-target="0" data-prefix="$">0</span>
+                    </div>
+                    <small>tap / click to see cost breakdown</small>
+                </div>
+                <!-- Back -->
+                <div class="flip-face back">
+                    <div class="label">Cost Comparison (per 1M)</div>
+                    <ul class="cost-list">
+                    <li>
+                        <strong>Cortex Analyst:</strong>
+                        <span class="cortex-cost">$0</span>
+                    </li>
+                    <li>
+                        <strong>MCPilot:</strong>
+                        <span class="mc-cost">$0</span>
+                    </li>
+                    <li>
+                        <strong>Estimated savings:</strong>
+                        <span class="savings-cost">$0</span>
+                    </li>
+                    </ul>
+                    <small>
+                    Includes API + compute + query execution for both sides. Numbers illustrative for pilot.
+                    </small>
+                </div>
+                </div>
+            </div>
+            </div>
+
+            <!-- <div class="assumptions glass">
+            <strong>Assumptions (tunable in <code>app.js</code>):</strong>
+            <ul>
+                <li>Cortex Analyst: $0.20 API + compute + query execution per successful request.</li>
+                <li>MCPilot: LLM + compute priced per request; both include infra + warehouse costs.</li>
+            </ul>
+            </div> -->
+        </div>
+    </section>
+
+
+    <!-- DEMO FLOW -->
+    <section id="demo" class="slide sticky">
+        <div class="container three">
+            <div
+            class="step card lift"
+            data-stagger
+            data-example="User types in chat: “Show all accounts owned by Asha Patel with ARR and health score.”"
+            >
+            <h3>1. Ask</h3>
+            <p>“Which accounts does Asha Patel own?”</p>
+            </div>
+
+            <div
+            class="step card lift"
+            data-stagger
+            data-example="MCPilot generates Cypher / SQL like: MATCH (u:Owner {name:'Asha Patel'})-[:OWNS]->(a:Account) RETURN a.name, a.arr, a.health_score;"
+            >
+            <h3>2. Generate</h3>
+            <p>LLM → Cypher / SQL from schema &amp; semantic YAML.</p>
+            </div>
+
+            <div
+            class="step card lift"
+            data-stagger
+            data-example="Results are summarized into a table and graph: top accounts by ARR, risk flags, next-best actions."
+            >
+            <h3>3. Validate &amp; Visualize</h3>
+            <p>Run, shape, summarize, and graph the answer.</p>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- ROADMAP -->
+    <section id="roadmap" class="slide">
+      <div class="container">
+        <h2 class="xxl center">Roadmap</h2>
+        <ol class="road">
+          <li>
+            <strong>Now — Foundation</strong>
+            <span>MVP with NL → SQL/Cypher, graph exploration, and this embedded presentation deck.</span>
+          </li>
+          <li>
+            <strong>Next — Governed Scale</strong>
+            <span>
+              Role-aware governance, approvals, multi-db connectivity (Snowflake, Databricks, Neo4j),
+              and quality telemetry.
+            </span>
+          </li>
+          <li>
+            <strong>Then — Live Agents &amp; Narratives</strong>
+            <span>
+              Always-on agents that watch events, schedule answers, and ship human-grade narratives
+              to PDF / slides.
+            </span>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- CONTACT -->
+    <section id="contact" class="slide end">
+      <div class="container center">
+        <h2 class="xxl">Thank you</h2>
+        <p>Questions? Ready to try MCPilot?</p>
+        <div class="cta-row">
+          <a class="btn magnet" href="/ui" target="_blank" rel="noopener noreferrer">Open App</a>
+          <a class="btn ghost magnet" href="#intro">Back to Top</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">© MCPilot</footer>
+</body>
+</html>

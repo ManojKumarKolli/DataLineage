@@ -1,0 +1,441 @@
+version: 1
+name: banking_mvp_semantic_model
+dialect: sqlite
+connection:
+  type: sqlite
+  database: data/banking_mvp.db  # adjust if your path differs
+
+entities:
+  - name: Customer
+    id_column: customers.customer_id
+    description: "End retail banking customer / account holder."
+    synonyms: ["client", "user", "person", "holder"]
+  - name: Account
+    id_column: accounts.account_id
+    description: "Bank account owned by a customer; checking, savings, or brokerage."
+    synonyms: ["acct", "bank account", "portfolio"]
+  - name: Transaction
+    id_column: transactions.txn_id
+    description: "Money movement or bookkeeping entry affecting an account."
+    synonyms: ["txn", "transfer", "posting", "charge", "deposit", "withdrawal"]
+  - name: TimeDeposit
+    id_column: time_deposits.deposit_id
+    description: "Fixed term deposit / CD associated to a deposit account."
+    synonyms: ["cd", "certificate of deposit", "fixed deposit"]
+  - name: SecurityPosition
+    id_column: securities_positions.position_id
+    description: "Brokerage position held in an account."
+    synonyms: ["position", "holding", "portfolio line"]
+
+tables:
+  - name: customers
+    entity: Customer
+    description: "KYC profile for each customer."
+    primary_key: customer_id
+    columns:
+      - name: customer_id
+        type: INTEGER
+        semantic_type: id
+        description: "Surrogate key for customer"
+      - name: full_name
+        type: TEXT
+        semantic_type: name
+        description: "Customer legal full name"
+        synonyms: ["customer", "name", "client"]
+      - name: email
+        type: TEXT
+        semantic_type: email
+        description: "Email address"
+        pii: true
+      - name: phone
+        type: TEXT
+        semantic_type: phone
+        description: "Phone number"
+        pii: true
+      - name: address
+        type: TEXT
+        semantic_type: text
+        description: "Mailing address"
+        pii: true
+      - name: kyc_status
+        type: TEXT
+        semantic_type: status
+        description: "KYC verification status"
+        enum: ["PENDING", "VERIFIED", "REJECTED"]
+        synonyms: ["kyc", "verification"]
+      - name: risk_rating
+        type: INTEGER
+        semantic_type: rating
+        description: "Operational risk score 1(low)-5(high)"
+      - name: created_at
+        type: TEXT
+        semantic_type: datetime
+        description: "Customer profile creation timestamp"
+
+  - name: accounts
+    entity: Account
+    description: "Bank accounts linked to customers."
+    primary_key: account_id
+    foreign_keys:
+      - column: customer_id
+        references: customers.customer_id
+    columns:
+      - name: account_id
+        type: INTEGER
+        semantic_type: id
+        description: "Surrogate key for account"
+      - name: customer_id
+        type: INTEGER
+        semantic_type: fk
+        description: "Owning customer id"
+      - name: account_type
+        type: TEXT
+        semantic_type: category
+        description: "Type of account"
+        enum: ["CHECKING", "SAVINGS", "BROKERAGE"]
+        synonyms: ["type", "kind", "product"]
+      - name: currency
+        type: TEXT
+        semantic_type: currency
+        description: "ISO currency code"
+        default: "USD"
+      - name: opened_date
+        type: TEXT
+        semantic_type: date
+        description: "Account open date"
+      - name: status
+        type: TEXT
+        semantic_type: status
+        description: "Account lifecycle status"
+        enum: ["OPEN", "FROZEN", "CLOSED"]
+      - name: balance
+        type: REAL
+        semantic_type: amount
+        description: "Current book balance in account currency"
+        synonyms: ["cash", "funds", "available balance"]
+
+  - name: transactions
+    entity: Transaction
+    description: "Monetary transactions associated with accounts."
+    primary_key: txn_id
+    foreign_keys:
+      - column: account_id
+        references: accounts.account_id
+    columns:
+      - name: txn_id
+        type: INTEGER
+        semantic_type: id
+        description: "Transaction id"
+      - name: account_id
+        type: INTEGER
+        semantic_type: fk
+        description: "Linked account id"
+      - name: txn_time
+        type: TEXT
+        semantic_type: datetime
+        description: "Transaction timestamp"
+        synonyms: ["date", "posted_at", "time"]
+      - name: amount
+        type: REAL
+        semantic_type: amount
+        description: "Signed amount (+ inflow, - outflow)"
+        synonyms: ["value", "money"]
+      - name: currency
+        type: TEXT
+        semantic_type: currency
+        description: "Transaction currency"
+      - name: txn_type
+        type: TEXT
+        semantic_type: category
+        description: "High-level type"
+        enum: ["DEPOSIT", "WITHDRAWAL", "TRANSFER_IN", "TRANSFER_OUT", "SEC_BUY", "SEC_SELL", "INTEREST"]
+        synonyms: ["type", "kind", "category", "code"]
+      - name: description
+        type: TEXT
+        semantic_type: text
+        description: "Free-text narrative"
+      - name: counterparty_account
+        type: INTEGER
+        semantic_type: number
+        description: "Counterparty account if internal transfer"
+
+  - name: time_deposits
+    entity: TimeDeposit
+    description: "Certificates of deposit / fixed term deposits."
+    primary_key: deposit_id
+    foreign_keys:
+      - column: account_id
+        references: accounts.account_id
+    columns:
+      - name: deposit_id
+        type: INTEGER
+        semantic_type: id
+        description: "CD id"
+      - name: account_id
+        type: INTEGER
+        semantic_type: fk
+        description: "Linked deposit account id"
+      - name: start_date
+        type: TEXT
+        semantic_type: date
+        description: "Start date"
+      - name: maturity_date
+        type: TEXT
+        semantic_type: date
+        description: "Maturity date"
+      - name: principal
+        type: REAL
+        semantic_type: amount
+        description: "Principal amount"
+      - name: interest_rate
+        type: REAL
+        semantic_type: fraction
+        description: "Annual rate (e.g., 0.035)"
+      - name: status
+        type: TEXT
+        semantic_type: status
+        description: "CD status"
+        enum: ["ACTIVE", "MATURED", "REDEEMED"]
+
+  - name: securities_positions
+    entity: SecurityPosition
+    description: "Brokerage positions for investment accounts."
+    primary_key: position_id
+    foreign_keys:
+      - column: account_id
+        references: accounts.account_id
+    columns:
+      - name: position_id
+        type: INTEGER
+        semantic_type: id
+        description: "Position id"
+      - name: account_id
+        type: INTEGER
+        semantic_type: fk
+        description: "Owning brokerage account id"
+      - name: symbol
+        type: TEXT
+        semantic_type: ticker
+        description: "Security symbol"
+        synonyms: ["ticker"]
+      - name: instrument_type
+        type: TEXT
+        semantic_type: category
+        description: "Asset class"
+        enum: ["STOCK", "BOND", "ETF", "FUND"]
+      - name: quantity
+        type: REAL
+        semantic_type: number
+        description: "Units held"
+      - name: avg_price
+        type: REAL
+        semantic_type: amount
+        description: "Average cost per unit"
+      - name: last_price
+        type: REAL
+        semantic_type: amount
+        description: "Latest mark price (nullable)"
+
+relationships:
+  - name: customer_has_accounts
+    left_table: customers
+    right_table: accounts
+    join: "customers.customer_id = accounts.customer_id"
+    cardinality: one_to_many
+
+  - name: account_has_transactions
+    left_table: accounts
+    right_table: transactions
+    join: "accounts.account_id = transactions.account_id"
+    cardinality: one_to_many
+
+  - name: account_has_time_deposits
+    left_table: accounts
+    right_table: time_deposits
+    join: "accounts.account_id = time_deposits.account_id"
+    cardinality: one_to_many
+
+  - name: account_has_positions
+    left_table: accounts
+    right_table: securities_positions
+    join: "accounts.account_id = securities_positions.account_id"
+    cardinality: one_to_many
+
+dimensions:
+  date:
+    definitions:
+      txn_date: "date(transactions.txn_time)"
+      txn_month: "strftime('%Y-%m', transactions.txn_time)"
+      txn_year: "strftime('%Y', transactions.txn_time)"
+      opened_month: "strftime('%Y-%m', accounts.opened_date)"
+      maturity_month: "strftime('%Y-%m', time_deposits.maturity_date)"
+  categorical:
+    definitions:
+      account_type: "accounts.account_type"
+      account_status: "accounts.status"
+      kyc_status: "customers.kyc_status"
+      instrument_type: "securities_positions.instrument_type"
+      symbol: "securities_positions.symbol"
+  entity_keys:
+    definitions:
+      customer_id: "customers.customer_id"
+      account_id: "accounts.account_id"
+
+metrics:
+  - name: total_balance
+    label: "Total Book Balance"
+    description: "Sum of current account balances (all accounts)."
+    type: aggregation
+    expression: "SUM(accounts.balance)"
+    grain: bank
+    joins: ["customer_has_accounts"]
+
+  - name: inflows
+    label: "Total Inflows"
+    description: "Sum of positive transaction amounts (including deposits, interest, transfer_in)."
+    type: aggregation
+    expression: "SUM(CASE WHEN transactions.amount > 0 THEN transactions.amount ELSE 0 END)"
+    grain: account
+    joins: ["account_has_transactions"]
+
+  - name: outflows
+    label: "Total Outflows"
+    description: "Absolute sum of negative transaction amounts (withdrawals, transfer_out, security buys)."
+    type: aggregation
+    expression: "ABS(SUM(CASE WHEN transactions.amount < 0 THEN transactions.amount ELSE 0 END))"
+    grain: account
+    joins: ["account_has_transactions"]
+
+  - name: net_flows
+    label: "Net Flows"
+    description: "Inflows minus Outflows over the selected period."
+    type: derived
+    expression: "({{inflows}} - {{outflows}})"
+    grain: account
+
+  - name: interest_earned
+    label: "Interest Earned"
+    description: "Sum of INTEREST transactions."
+    type: aggregation
+    expression: "SUM(CASE WHEN transactions.txn_type = 'INTEREST' THEN transactions.amount ELSE 0 END)"
+    grain: account
+    joins: ["account_has_transactions"]
+
+  - name: cd_principal
+    label: "CD Principal"
+    description: "Sum of principal across ACTIVE time deposits."
+    type: aggregation
+    expression: "SUM(CASE WHEN time_deposits.status = 'ACTIVE' THEN time_deposits.principal ELSE 0 END)"
+    grain: account
+    joins: ["account_has_time_deposits"]
+
+  - name: portfolio_market_value
+    label: "Portfolio Market Value"
+    description: "Mark-to-market value using last_price when available; fallback to avg_price."
+    type: aggregation
+    expression: "SUM(securities_positions.quantity * COALESCE(securities_positions.last_price, securities_positions.avg_price))"
+    grain: account
+    joins: ["account_has_positions"]
+
+  - name: positions_count
+    label: "Count of Positions"
+    description: "Number of securities positions."
+    type: aggregation
+    expression: "COUNT(securities_positions.position_id)"
+    grain: account
+    joins: ["account_has_positions"]
+
+  - name: active_customers
+    label: "Active Customers"
+    description: "Customers with at least one OPEN account."
+    type: aggregation
+    expression: "COUNT(DISTINCT CASE WHEN accounts.status = 'OPEN' THEN customers.customer_id END)"
+    grain: bank
+    joins: ["customer_has_accounts"]
+
+views:
+  - name: v_account_txn_daily
+    description: "Daily net flow by account."
+    sql: |
+      SELECT
+        a.account_id,
+        date(t.txn_time) AS txn_date,
+        SUM(t.amount)    AS net_amount
+      FROM accounts a
+      JOIN transactions t ON a.account_id = t.account_id
+      GROUP BY 1,2
+
+  - name: v_portfolio_holdings
+    description: "Current holdings with market value."
+    sql: |
+      SELECT
+        a.account_id,
+        sp.symbol,
+        sp.instrument_type,
+        sp.quantity,
+        sp.avg_price,
+        COALESCE(sp.last_price, sp.avg_price) AS price,
+        (sp.quantity * COALESCE(sp.last_price, sp.avg_price)) AS market_value
+      FROM accounts a
+      JOIN securities_positions sp ON sp.account_id = a.account_id
+
+intents:
+  - utterances: ["total cash on hand", "sum of balances", "bank balance overall"]
+    map:
+      metric: total_balance
+
+  - utterances: ["net cash flow last month", "money in minus out in October"]
+    map:
+      metric: net_flows
+      where:
+        - "strftime('%Y-%m', transactions.txn_time) = '{{period}}'"
+
+  - utterances: ["portfolio value for brokerage accounts", "total holdings market value"]
+    map:
+      metric: portfolio_market_value
+      where:
+        - "accounts.account_type = 'BROKERAGE'"
+
+  - utterances: ["active customers", "customers with open accounts"]
+    map:
+      metric: active_customers
+
+governance:
+  pii_columns:
+    - customers.email
+    - customers.phone
+    - customers.address
+  policies:
+    - name: suppress_pii_by_default
+      rule: "MASK() on pii_columns unless role in ('admin','compliance')"
+
+samples:
+  - q: "Show top 5 accounts by balance"
+    sql: |
+      SELECT account_id, balance
+      FROM accounts
+      WHERE status = 'OPEN'
+      ORDER BY balance DESC
+      LIMIT 5;
+
+  - q: "Monthly net flows for checking accounts"
+    sql: |
+      SELECT
+        strftime('%Y-%m', t.txn_time) AS month,
+        SUM(t.amount) AS net_flows
+      FROM transactions t
+      JOIN accounts a ON a.account_id = t.account_id
+      WHERE a.account_type = 'CHECKING'
+      GROUP BY 1
+      ORDER BY 1;
+
+  - q: "Portfolio market value by customer"
+    sql: |
+      SELECT
+        c.full_name,
+        SUM(sp.quantity * COALESCE(sp.last_price, sp.avg_price)) AS market_value
+      FROM customers c
+      JOIN accounts a ON a.customer_id = c.customer_id
+      JOIN securities_positions sp ON sp.account_id = a.account_id
+      GROUP BY 1
+      ORDER BY market_value DESC;

@@ -1,0 +1,51 @@
+{
+  "question": "Show all transactions for account 102.",
+  "request": {
+    "action": "run",
+    "modelInterface": "langchain",
+    "data": {
+      "mode": "chain",
+      "text": "Neo4j schema:\n- Account(account_id, account_type, balance, currency, opened_date, status)\n- Customer(address, created_at, customer_id, email, full_name, kyc_status, phone, risk_rating)\n- SecurityPosition(avg_price, instrument_type, last_price, position_id, quantity, symbol)\n- TimeDeposit(deposit_id, interest_rate, maturity_date, principal, start_date, status)\n- Transaction(amount, currency, description, txn_id, txn_time, txn_type)\nRelationships: COUNTERPARTY, HAS_DEPOSIT, HAS_POSITION, OWNS, POSTED\n\nWrite ONE READ-ONLY Cypher to answer the user question.\nUse only MATCH/WHERE/RETURN/ORDER BY/LIMIT. No updates, no APOC.\nReturn Cypher ONLY (no prose, no code fences).\nQuestion: Show all transactions for account 102.\nCypher:",
+      "files": [],
+      "modelName": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+      "provider": "bedrock",
+      "systemPrompt": "Only Cypher. No prose.",
+      "modelKwargs": {
+        "maxTokens": 512,
+        "temperature": 0.2,
+        "streaming": false,
+        "topP": 0.9
+      }
+    }
+  },
+  "response": {
+    "sessionId": "befb7a38-d07b-4eca-b960-d855ed0e1134",
+    "type": "text",
+    "content": "MATCH (t:Transaction)-[p:POSTED]->(a:Account)\nWHERE a.account_id = '102'\nRETURN t.txn_id, t.txn_type, t.amount, t.currency, t.description, t.txn_time\nORDER BY t.txn_time DESC",
+    "metadata": {
+      "modelId": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+      "modelKwargs": {
+        "maxTokens": 512,
+        "streaming": false,
+        "temperature": 0.2,
+        "topP": 0.9,
+        "topK": null
+      },
+      "ragKwargs": {},
+      "sessionId": "befb7a38-d07b-4eca-b960-d855ed0e1134",
+      "userId": "apvkkospp7",
+      "studioId": "c90d0d13-0c37-41b1-b0d9-ac060e0e7374",
+      "usage": {
+        "input_tokens": 250,
+        "output_tokens": 77,
+        "total_tokens": 327
+      },
+      "agentName": null,
+      "avatarUrl": null,
+      "documents": null,
+      "workspaceId": null,
+      "files": null
+    }
+  },
+  "raw": "MATCH (t:Transaction)-[p:POSTED]->(a:Account)\nWHERE a.account_id = '102'\nRETURN t.txn_id, t.txn_type, t.amount, t.currency, t.description, t.txn_time\nORDER BY t.txn_time DESC"
+}

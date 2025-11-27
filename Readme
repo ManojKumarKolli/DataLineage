@@ -1,0 +1,23 @@
+To create SSqllite3
+
+Create & seed (idempotent):
+python build_banking_db.py --db banking_mvp.db
+
+
+Create tables only:
+python build_banking_db.py --db banking_mvp.db --no-seed
+
+
+
+Run Neo4J script:
+
+
+python load_to_neo4j.py \
+  --sqlite banking_mvp.db \
+  --neo4j-uri neo4j://127.0.0.1:7687 \
+  --neo4j-user neo4j \
+  --neo4j-pass Neo4j@123
+
+
+
+  uvicorn apps.graphrag_api.app:app --reload --port 8000

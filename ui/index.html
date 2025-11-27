@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MCPilot • Data Copilot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Styles -->
+  <link rel="stylesheet" href="styles.css" />
+  <!-- D3 for graph -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js" defer></script>
+  <!-- highlight.js for code -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js" defer></script>
+  <script>document.addEventListener('DOMContentLoaded',()=>{ if (window.hljs) hljs.highlightAll(); });</script>
+  <!-- App -->
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <!-- App Shell -->
+  <div class="app">
+    <!-- Gradient top bar -->
+    <header class="topbar glass">
+      <div class="brand">
+        <div class="logo-pulse"></div>
+        <div>
+          <h1>MCPilot</h1>
+          <span class="sub">GraphRAG + Cortex (LLM)</span>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="select-wrap">
+          <label for="modelSel">Model</label>
+          <select id="modelSel" title="Select runtime LLM model"></select>
+        </div>
+        <div id="modelActive" class="badge">model: …</div>
+        <button id="healthBtn" class="soft" title="Check health">Health</button>
+      </div>
+    </header>
+
+    <div class="main">
+      <!-- Sidebar -->
+      <aside class="sidebar glass">
+        <nav class="tabs">
+          <button class="tab active" data-tab="sql">Semantic SQL</button>
+          <button class="tab" data-tab="graph">GraphRAG</button>
+          <button class="tab" data-tab="tables">Tables</button>
+        </nav>
+
+        <section class="quick glass">
+          <h3>Quick Prompts</h3>
+          <div class="qpills">
+            <button data-fill="Which customer has the highest total balance?">Highest balance</button>
+            <button data-fill="Give me the person name with highest number of different account types">Most account types</button>
+            <button data-fill="Monthly net flows for checking accounts">Net flows by month</button>
+            <button data-fill="Which accounts does Asha Patel own?">Asha’s accounts</button>
+            <button data-fill="Show portfolio market value by customer">Portfolio by customer</button>
+          </div>
+        </section>
+
+        <section class="help glass">
+          <h3>Tips</h3>
+          <ul>
+            <li>Press <kbd>Enter</kbd> to send.</li>
+            <li>Use the <strong>GraphRAG</strong> tab for relationship questions.</li>
+            <li>Use the <strong>Semantic SQL</strong> tab for numeric/aggregations.</li>
+          </ul>
+        </section>
+      </aside>
+
+      <!-- Content -->
+      <section class="content">
+        <!-- Conversation -->
+        <div class="chat glass" id="chat">
+          <!-- Messages appear here -->
+        </div>
+
+        <!-- Input Bar -->
+        <div class="composer glass">
+          <div class="chipset">
+            <span id="activeTabChip" class="chip">Semantic SQL</span>
+            <span class="sep"></span>
+            <span id="statusDot" class="dot idle"></span>
+            <span id="statusText" class="status">Ready</span>
+          </div>
+          <div class="inputbar">
+            <textarea id="prompt" placeholder="Ask anything… (e.g., Which customer has the highest accounts?)" rows="1"></textarea>
+            <button id="sendBtn" class="primary">Send</button>
+          </div>
+          <div id="typing" class="typing hide">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+
+        <!-- Data Panels -->
+        <div class="panes">
+          <!-- SQL / Table output -->
+          <div class="pane glass" id="pane-sql">
+            <div class="pane-head">
+              <h3>Result</h3>
+              <div class="pane-actions">
+                <button id="copySql" class="soft" title="Copy SQL">Copy SQL</button>
+              </div>
+            </div>
+            <pre class="code"><code id="sqlCode" class="language-sql"></code></pre>
+            <div id="sqlSummary" class="summary"></div>
+            <div id="sqlTable" class="tablewrap"></div>
+          </div>
+
+          <!-- Graph output -->
+          <div class="pane glass hide" id="pane-graph">
+            <div class="pane-head">
+              <h3>GraphRAG</h3>
+              <div class="pane-actions">
+                <button id="copyCypher" class="soft" title="Copy Cypher">Copy Cypher</button>
+                <button id="runViz" class="soft">Visualize</button>
+              </div>
+            </div>
+
+            <!-- Generated Cypher -->
+            <label class="field-label">Generated Cypher</label>
+            <pre class="code"><code id="graphCode" class="language-sql">/* your Cypher will appear here */</code></pre>
+
+            <!-- Results table -->
+            <div class="pane-head" style="margin-top:10px;">
+              <h3>Results</h3>
+            </div>
+            <div id="graphTable" class="tablewrap"></div>
+
+            <!-- Custom viz -->
+            <div class="pane-head" style="margin-top:10px;">
+              <h3>Visualization</h3>
+            </div>
+            <div class="split">
+              <div class="left">
+                <label class="field-label">Custom Cypher</label>
+                <textarea id="cypher" rows="8">MATCH (c:Customer)-[r:OWNS]->(a:Account) RETURN c,r,a LIMIT 150</textarea>
+              </div>
+              <div class="right">
+                <div id="graphMount" class="graph"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tables preview -->
+          <div class="pane glass hide" id="pane-tables">
+            <div class="pane-head">
+              <h3>Preview Tables</h3>
+              <div class="pane-actions">
+                <button id="refreshTables" class="soft">Refresh</button>
+              </div>
+            </div>
+            <div id="tablesGrid" class="tables-grid"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Toasts -->
+  <div id="toasts" class="toasts"></div>
+</body>
+</html>

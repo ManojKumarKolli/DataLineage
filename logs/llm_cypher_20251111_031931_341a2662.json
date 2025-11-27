@@ -1,0 +1,51 @@
+{
+  "question": "Who holds the highest stocks?",
+  "request": {
+    "action": "run",
+    "modelInterface": "langchain",
+    "data": {
+      "mode": "chain",
+      "text": "Neo4j schema:\n- Account(account_id, account_type, balance, currency, opened_date, status)\n- Customer(address, created_at, customer_id, email, full_name, kyc_status, phone, risk_rating)\n- SecurityPosition(avg_price, instrument_type, last_price, position_id, quantity, symbol)\n- TimeDeposit(deposit_id, interest_rate, maturity_date, principal, start_date, status)\n- Transaction(amount, currency, description, txn_id, txn_time, txn_type)\nRelationships: COUNTERPARTY, HAS_DEPOSIT, HAS_POSITION, OWNS, POSTED\n\nWrite ONE READ-ONLY Cypher to answer the user question.\nUse only MATCH/WHERE/RETURN/ORDER BY/LIMIT. No updates, no APOC.\nReturn Cypher ONLY (no prose, no code fences).\nQuestion: Who holds the highest stocks?\nCypher:",
+      "files": [],
+      "modelName": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+      "provider": "bedrock",
+      "systemPrompt": "Only Cypher. No prose.",
+      "modelKwargs": {
+        "maxTokens": 512,
+        "temperature": 0.2,
+        "streaming": false,
+        "topP": 0.9
+      }
+    }
+  },
+  "response": {
+    "sessionId": "863852f3-124c-469d-9190-f6994a4037b7",
+    "type": "text",
+    "content": "MATCH (c:Customer)-[:OWNS]->(a:Account)-[:HAS_POSITION]->(sp:SecurityPosition)\nWHERE sp.instrument_type = 'STOCK'\nWITH c, sp.quantity * sp.last_price as position_value\nRETURN c.full_name, sum(position_value) as total_stock_value\nORDER BY total_stock_value DESC\nLIMIT 1",
+    "metadata": {
+      "modelId": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+      "modelKwargs": {
+        "maxTokens": 512,
+        "streaming": false,
+        "temperature": 0.2,
+        "topP": 0.9,
+        "topK": null
+      },
+      "ragKwargs": {},
+      "sessionId": "863852f3-124c-469d-9190-f6994a4037b7",
+      "userId": "apvkkospp7",
+      "studioId": "c90d0d13-0c37-41b1-b0d9-ac060e0e7374",
+      "usage": {
+        "input_tokens": 248,
+        "output_tokens": 97,
+        "total_tokens": 345
+      },
+      "agentName": null,
+      "avatarUrl": null,
+      "documents": null,
+      "workspaceId": null,
+      "files": null
+    }
+  },
+  "raw": "MATCH (c:Customer)-[:OWNS]->(a:Account)-[:HAS_POSITION]->(sp:SecurityPosition)\nWHERE sp.instrument_type = 'STOCK'\nWITH c, sp.quantity * sp.last_price as position_value\nRETURN c.full_name, sum(position_value) as total_stock_value\nORDER BY total_stock_value DESC\nLIMIT 1"
+}

@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MCPilot • Lineage Investigator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js" defer></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.hljs) hljs.highlightAll();
+    });
+  </script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="app">
+    <!-- Top bar -->
+    <header class="topbar glass">
+      <div class="brand">
+        <div class="logo-pulse"></div>
+        <div>
+          <h1>MCPilot Lineage</h1>
+          <span class="sub">End-to-end balance & data flow investigation</span>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="control-block">
+          <label class="label">
+            Lineage Mode
+            <span class="info" data-tooltip="This view shows how balances and metrics move from RAW → STAGE → MART, and where they drift.">ⓘ</span>
+          </label>
+          <div class="pill">Balance & KPI Lineage</div>
+        </div>
+        <button id="healthBtn" class="soft">API Health</button>
+        <button id="seedBtn" class="soft" title="Load demo lineage data">
+            Seed demo data
+        </button>
+      </div>
+    </header>
+
+    <main class="main">
+      <!-- LEFT: Controls & overview -->
+      <section class="column left glass">
+        <!-- Investigation header -->
+        <section class="panel">
+          <div class="panel-head">
+            <h2>
+              Investigation
+              <span class="info" data-tooltip="Describe a data issue and I’ll reconcile RAW, STAGE and MART for you.">ⓘ</span>
+            </h2>
+          </div>
+          <div class="investigation">
+            <label class="field-label">
+              Describe the issue
+              <span class="info" data-tooltip="Example: “Balances for account 102 look too high” or “Customer Asha Patel’s balance changed between stage and mart”.">ⓘ</span>
+            </label>
+            <textarea id="issueText" rows="3" placeholder="e.g. Balances for account 102 are not matching downstream mart…"></textarea>
+
+            <div class="field-row">
+              <div class="field">
+                <label class="field-label">
+                  Focus by
+                  <span class="info" data-tooltip="Investigate by account, customer, or entire portfolio.">ⓘ</span>
+                </label>
+                <select id="focusBy">
+                  <option value="account">Account</option>
+                  <option value="customer">Customer</option>
+                  <option value="portfolio">Portfolio</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field-label">
+                  Identifier
+                  <span class="info" data-tooltip="Account id, customer name, or portfolio name (depending on focus).">ⓘ</span>
+                </label>
+                <input id="focusId" placeholder="e.g. 102 or Asha Patel" />
+              </div>
+            </div>
+
+            <button id="runInvestigation" class="primary">Run Lineage Investigation</button>
+          </div>
+        </section>
+
+        <!-- Stage KPIs -->
+        <section class="panel">
+          <div class="panel-head">
+            <h2>
+              Stage Overview
+              <span class="info" data-tooltip="High-level metrics for each pipeline stage: rows, total balance, and data quality issues.">ⓘ</span>
+            </h2>
+          </div>
+          <div id="stageStrip" class="stage-strip">
+            <!-- filled by JS -->
+          </div>
+        </section>
+
+        <!-- Sample tables preview (now in its own scrollable grid) -->
+        <section class="panel">
+          <div class="panel-head">
+            <h2>
+              Sample Tables
+              <span class="info" data-tooltip="Peek into RAW, STAGE and MART tables to see how the data actually looks.">ⓘ</span>
+            </h2>
+            <button id="refreshPreview" class="soft small">Refresh</button>
+          </div>
+          <div id="previewGrid" class="preview-grid">
+            <!-- cards filled by JS -->
+          </div>
+        </section>
+      </section>
+
+      <!-- RIGHT: Results & lineage path -->
+      <section class="column right glass">
+        <!-- Summary & narrative -->
+        <section class="panel">
+          <div class="panel-head">
+            <h2>
+              Summary & Narrative
+              <span class="info" data-tooltip="Automated reconciliation summary and human-style explanation.">ⓘ</span>
+            </h2>
+          </div>
+          <div id="summaryMetrics" class="metrics-row">
+            <!-- headline metrics filled by JS -->
+          </div>
+          <div id="narrative" class="narrative"></div>
+        </section>
+
+        <!-- Sankey/lineage strip (textual for now) -->
+        <section class="panel">
+          <div class="panel-head">
+            <h2>
+              Lineage Path
+              <span class="info" data-tooltip="How the selected entity flows across RAW → STAGE → MART, with deltas.">ⓘ</span>
+            </h2>
+          </div>
+          <div id="lineagePath" class="lineage-path">
+            <!-- small visual path cards -->
+          </div>
+        </section>
+
+        <!-- Detailed diffs -->
+        <section class="panel">
+          <div class="panel-head">
+            <h2>
+              Detailed Diffs
+              <span class="info" data-tooltip="Per-account / per-metric differences across stages, sorted by impact.">ⓘ</span>
+            </h2>
+            <div class="panel-actions">
+              <button id="exportCsv" class="soft small">Export CSV</button>
+            </div>
+          </div>
+          <div id="diffTable" class="tablewrap"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div id="tooltip" class="tooltip hidden"></div>
+  <div id="toasts" class="toasts"></div>
+</body>
+</html>

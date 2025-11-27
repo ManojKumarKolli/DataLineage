@@ -1,0 +1,51 @@
+{
+  "question": "Monthly net flows for checking accounts",
+  "request": {
+    "action": "run",
+    "modelInterface": "langchain",
+    "data": {
+      "mode": "chain",
+      "text": "Neo4j schema:\n- Account(account_id, account_type, balance, currency, opened_date, status)\n- Customer(address, created_at, customer_id, email, full_name, kyc_status, phone, risk_rating)\n- SecurityPosition(avg_price, instrument_type, last_price, position_id, quantity, symbol)\n- TimeDeposit(deposit_id, interest_rate, maturity_date, principal, start_date, status)\n- Transaction(amount, currency, description, txn_id, txn_time, txn_type)\nRelationships: COUNTERPARTY, HAS_DEPOSIT, HAS_POSITION, OWNS, POSTED\n\nWrite ONE READ-ONLY Cypher to answer the user question.\nUse only MATCH/WHERE/RETURN/ORDER BY/LIMIT. No updates, no APOC.\nReturn Cypher ONLY (no prose, no code fences).\nQuestion: Monthly net flows for checking accounts\nCypher:",
+      "files": [],
+      "modelName": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+      "provider": "bedrock",
+      "systemPrompt": "Only Cypher. No prose.",
+      "modelKwargs": {
+        "maxTokens": 512,
+        "temperature": 0.2,
+        "streaming": false,
+        "topP": 0.9
+      }
+    }
+  },
+  "response": {
+    "sessionId": "3d46688a-0f43-476a-8a18-1e49033640b1",
+    "type": "text",
+    "content": "MATCH (c:Customer)-[:OWNS]->(a:Account)-[:POSTED]->(t:Transaction)\nWHERE a.account_type = 'CHECKING'\nWITH t.txn_time.month AS month, t.txn_time.year AS year,\n     SUM(CASE WHEN t.txn_type = 'CREDIT' THEN t.amount \n              WHEN t.txn_type = 'DEBIT' THEN -t.amount \n              ELSE 0 END) AS net_flow\nRETURN year, month, net_flow\nORDER BY year, month",
+    "metadata": {
+      "modelId": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+      "modelKwargs": {
+        "maxTokens": 512,
+        "streaming": false,
+        "temperature": 0.2,
+        "topP": 0.9,
+        "topK": null
+      },
+      "ragKwargs": {},
+      "sessionId": "3d46688a-0f43-476a-8a18-1e49033640b1",
+      "userId": "apvkkospp7",
+      "studioId": "c90d0d13-0c37-41b1-b0d9-ac060e0e7374",
+      "usage": {
+        "input_tokens": 248,
+        "output_tokens": 145,
+        "total_tokens": 393
+      },
+      "agentName": null,
+      "avatarUrl": null,
+      "documents": null,
+      "workspaceId": null,
+      "files": null
+    }
+  },
+  "raw": "MATCH (c:Customer)-[:OWNS]->(a:Account)-[:POSTED]->(t:Transaction)\nWHERE a.account_type = 'CHECKING'\nWITH t.txn_time.month AS month, t.txn_time.year AS year,\n     SUM(CASE WHEN t.txn_type = 'CREDIT' THEN t.amount \n              WHEN t.txn_type = 'DEBIT' THEN -t.amount \n              ELSE 0 END) AS net_flow\nRETURN year, month, net_flow\nORDER BY year, month"
+}
