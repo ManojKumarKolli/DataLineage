@@ -235,189 +235,212 @@ def lineage_reconcile_entity(
     model: str | None = Query(None, description="Override LLM model for narrative (optional)")
 ):
     """
-    Entity-level reconcile used by the UI.
+    Entity-level lineage investigation used by the UI.
 
     - focusBy: 'account' or 'customer'
     - identifier: e.g. '102' or 'Asha Patel'
     - issue: free-text, passed into narrative generator
     """
 
-    # 1) balances across stages
-    bal = lineage.balances_across_stages(by=focusBy, key=identifier)
+    fb = (focusBy or "account").lower()
+    key = identifier
+
+    # 1) Get balances + lineage context (raw → stage → mart)
+    bal = lineage.balances_across_stages(by=fb, key=key)
     if not bal.get("ok"):
         raise HTTPException(status_code=400, detail=bal.get("error", "balances_across_stages failed"))
 
-    # 2) row-level diffs
-    diffs = lineage.diffs(by=focusBy, key=identifier)
+    # 2) Row-level diffs (raw vs stage)
+    diffs = lineage.diffs(by=fb, key=key)
     if not diffs.get("ok"):
         raise HTTPException(status_code=400, detail=diffs.get("error", "diffs failed"))
 
-    # ---------- Build metrics + raw→stage→mart path ----------
+    # ---------- Build metrics + path for the UI ----------
     metrics: Dict[str, Any] = {}
-    path: List[Dict[str, Any]] = []
+    path: list[Dict[str, Any]] = []
 
-    def _delta(prev: Optional[float], curr: Optional[float]) -> tuple[Optional[float], Optional[float]]:
-        if prev is None or curr is None:
-            return (None, None)
-        d = curr - prev
-        pct = None if prev == 0 else d / prev
-        return (d, pct)
-
-    if bal.get("by") == "account":
+    if fb == "account":
+        # balances_across_stages(by='account') returns:
+        #   raw:   (account_id, customer_id, account_type, balance)
+        #   stage: (account_id, customer_id, account_type, balance)
         raw_row = bal.get("raw")
-        stage_row = bal.get("stage")
+        stg_row = bal.get("stage")
         mart_total = bal.get("mart_customer_total")
         fees = bal.get("fees")
 
-        raw_bal = raw_row[3] if raw_row else None  # (account_id, customer_id, account_type, balance)
-        stage_bal = stage_row[3] if stage_row else None
-        mart_bal = mart_total
+        raw_bal = raw_row[3] if raw_row else None
+        stg_bal = stg_row[3] if stg_row else None
 
-        # raw node
-        if raw_bal is not None:
-            path.append({
-                "stage": "raw",
-                "label": "Raw accounts",
-                "balance": raw_bal,
-                "delta_balance": None,
-                "delta_percent": None,
-                "txn_count": None,
-            })
+        def _delta(a, b):
+            if a is None or b is None:
+                return None, None
+            d = b - a
+            pct = (d / a) if abs(a) > 1e-9 else None
+            return d, pct
 
-        # stage node
-        if stage_bal is not None:
-            d, pct = _delta(raw_bal, stage_bal) if raw_bal is not None else (None, None)
-            path.append({
-                "stage": "stage",
-                "label": "Stage accounts",
-                "balance": stage_bal,
-                "delta_balance": d,
-                "delta_percent": pct,
-                "txn_count": None,
-            })
-
-        # mart node (customer rollup)
-        if mart_bal is not None:
-            base = stage_bal if stage_bal is not None else raw_bal
-            d, pct = _delta(base, mart_bal) if base is not None else (None, None)
-            path.append({
-                "stage": "mart",
-                "label": "Customer balance mart",
-                "balance": mart_bal,
-                "delta_balance": d,
-                "delta_percent": pct,
-                "txn_count": None,
-            })
+        d_stage, pct_stage = _delta(raw_bal, stg_bal)
+        d_mart, pct_mart = _delta(stg_bal if stg_bal is not None else raw_bal, mart_total)
 
         metrics = {
             "raw_balance": raw_bal,
-            "stage_balance": stage_bal,
-            "mart_balance": mart_bal,
-            "gross_drift": (mart_bal - raw_bal) if raw_bal is not None and mart_bal is not None else None,
-            "fees_for_account": fees,
-        }
-
-    elif bal.get("by") == "customer":
-        totals = bal.get("totals", {})
-        raw_bal = totals.get("raw")
-        stage_bal = totals.get("stage")
-        mart_bal = totals.get("mart")
-        fees = totals.get("fees")
-
-        # raw node
-        if raw_bal is not None:
-            path.append({
-                "stage": "raw",
-                "label": "Raw accounts",
-                "balance": raw_bal,
-                "delta_balance": None,
-                "delta_percent": None,
-                "txn_count": None,
-            })
-
-        # stage node
-        if stage_bal is not None:
-            d, pct = _delta(raw_bal, stage_bal) if raw_bal is not None else (None, None)
-            path.append({
-                "stage": "stage",
-                "label": "Stage accounts",
-                "balance": stage_bal,
-                "delta_balance": d,
-                "delta_percent": pct,
-                "txn_count": None,
-            })
-
-        # mart node
-        if mart_bal is not None:
-            base = stage_bal if stage_bal is not None else raw_bal
-            d, pct = _delta(base, mart_bal) if base is not None else (None, None)
-            path.append({
-                "stage": "mart",
-                "label": "Customer balance mart",
-                "balance": mart_bal,
-                "delta_balance": d,
-                "delta_percent": pct,
-                "txn_count": None,
-            })
-
-        metrics = {
-            "raw_balance": raw_bal,
-            "stage_balance": stage_bal,
-            "mart_balance": mart_bal,
-            "gross_drift": (mart_bal - raw_bal) if raw_bal is not None and mart_bal is not None else None,
+            "stage_balance": stg_bal,
+            "mart_customer_total": mart_total,
             "fees_total": fees,
+            "delta_stage_vs_raw": d_stage,
+            "delta_stage_vs_raw_pct": pct_stage,
+            "delta_mart_vs_stage_or_raw": d_mart,
+            "delta_mart_vs_stage_or_raw_pct": pct_mart,
         }
 
-    # ---------- Convert diffs(rows+columns) into list-of-objects ----------
-    cols_raw = diffs.get("columns") or []
-    rows_raw = diffs.get("rows") or []
+        path = [
+            {
+                "stage": "raw",
+                "label": "Raw account snapshot",
+                "balance": raw_bal,
+                "txn_count": None,
+                "delta_balance": None,
+                "delta_percent": None,
+            },
+            {
+                "stage": "stage",
+                "label": "Staging account snapshot",
+                "balance": stg_bal,
+                "txn_count": None,
+                "delta_balance": d_stage,
+                "delta_percent": pct_stage,
+            },
+            {
+                "stage": "mart",
+                "label": "Customer-level mart total",
+                "balance": mart_total,
+                "txn_count": None,
+                "delta_balance": d_mart,
+                "delta_percent": pct_mart,
+            },
+        ]
 
-    diff_objects: List[Dict[str, Any]] = []
-    for r in rows_raw:
-        if isinstance(r, (list, tuple)):
-            obj = {}
-            for i, col in enumerate(cols_raw):
-                obj[col] = r[i] if i < len(r) else None
-            diff_objects.append(obj)
-        elif isinstance(r, dict):
-            diff_objects.append(r)
-        else:
-            # fallback: wrap as a single-column row
-            diff_objects.append({"value": r})
+    elif fb == "customer":
+        # balances_across_stages(by='customer') returns:
+        #   totals: {raw, stage, mart, fees}
+        totals = bal.get("totals", {}) or {}
+        raw_total = totals.get("raw")
+        stage_total = totals.get("stage")
+        mart_total = totals.get("mart")
+        fees_total = totals.get("fees")
 
-    # ---------- Metrics from diffs (discrepancies) ----------
-    discrepant_accounts = 0
-    max_var_pct: Optional[float] = None
-    for r in rows_raw:
-        if isinstance(r, (list, tuple)) and len(r) >= 4:
-            delta_val = r[3]
-            raw_val = r[1]
-            if delta_val is not None and abs(delta_val) > 0.01:
-                discrepant_accounts += 1
-                if raw_val not in (None, 0):
-                    pct = abs(delta_val) / abs(raw_val)
-                    if max_var_pct is None or pct > max_var_pct:
-                        max_var_pct = pct
+        def _delta(a, b):
+            if a is None or b is None:
+                return None, None
+            d = b - a
+            pct = (d / a) if abs(a) > 1e-9 else None
+            return d, pct
 
-    metrics["discrepant_accounts"] = discrepant_accounts
-    metrics["max_variance_percent"] = max_var_pct
+        d_stage, pct_stage = _delta(raw_total, stage_total)
+        d_mart, pct_mart = _delta(stage_total if stage_total is not None else raw_total, mart_total)
 
-    # ---------- LLM narrative ----------
-    nar_payload = {
-        "focus_by": focusBy,
-        "identifier": identifier,
-        "issue": issue,
-        "balances": bal,
-        "diffs": diffs,
+        metrics = {
+            "raw_total": raw_total,
+            "stage_total": stage_total,
+            "mart_total": mart_total,
+            "fees_total": fees_total,
+            "delta_stage_vs_raw": d_stage,
+            "delta_stage_vs_raw_pct": pct_stage,
+            "delta_mart_vs_stage_or_raw": d_mart,
+            "delta_mart_vs_stage_or_raw_pct": pct_mart,
+        }
+
+        path = [
+            {
+                "stage": "raw",
+                "label": "Raw accounts (per-account balances)",
+                "balance": raw_total,
+                "txn_count": None,
+                "delta_balance": None,
+                "delta_percent": None,
+            },
+            {
+                "stage": "stage",
+                "label": "Staging accounts (cleansed balances)",
+                "balance": stage_total,
+                "txn_count": None,
+                "delta_balance": d_stage,
+                "delta_percent": pct_stage,
+            },
+            {
+                "stage": "mart",
+                "label": "Customer mart balance (sum of accounts)",
+                "balance": mart_total,
+                "txn_count": None,
+                "delta_balance": d_mart,
+                "delta_percent": pct_mart,
+            },
+        ]
+
+    # ---------- Build tables for the LLM (richer context) ----------
+    tables: list[Dict[str, Any]] = []
+
+    # Table 1: raw vs stage by account (from diffs())
+    if diffs.get("rows"):
+        tables.append({
+            "title": "Raw vs stage balances by account",
+            "columns": diffs.get("columns", []),
+            "rows": diffs.get("rows", []),
+        })
+
+    # Table 2: customer account breakdown (for account-focused investigation)
+    # balances_across_stages(by='account') now returns customer_accounts_stage etc.
+    if fb == "account":
+        cust_stage = bal.get("customer_accounts_stage") or []
+        if cust_stage:
+            tables.append({
+                "title": "All accounts for this customer (stage_accounts)",
+                "columns": ["account_id", "account_type", "balance"],
+                "rows": cust_stage,
+            })
+
+    # Table 3: per-stage account details (for customer-focused investigations)
+    if fb == "customer":
+        for block in bal.get("details", []):
+            stage = block.get("stage")
+            rows = block.get("rows", [])
+            if rows:
+                tables.append({
+                    "title": f"Accounts at {stage} stage",
+                    "columns": ["account_id", "account_type", "balance"],
+                    "rows": rows,
+                })
+
+    # Semantic hint to steer the LLM toward the *right* explanation
+    semantic_hint = (
+        "Important: the mart table 'mart.customer_balances' is aggregated at CUSTOMER level. "
+        "It sums balances from all of a customer's accounts (e.g., checking + savings + brokerage). "
+        "Raw/stage tables hold individual ACCOUNT rows."
+    )
+
+    # 3) LLM narrative (Capgemini) with question + metrics + tables
+    payload_for_llm = {
+        "focus_by": fb,
+        "identifier": key,
+        "issue": issue or "Balances are not matching across stages for this entity.",
+        "metrics": metrics,
+        "balances_raw_payload": bal,
+        "diffs_raw_payload": diffs,
+        "semantic_hint": semantic_hint,
+        "tables": tables,
     }
-    nar = lineage.narrative(nar_payload, model_name=model or os.getenv("CAPGEMINI_MODEL"))
+
+    nar = lineage.narrative(payload_for_llm, model_name=model or os.getenv("CAPGEMINI_MODEL"))
+
+    # 4) Final shape for UI
+    diff_rows = diffs.get("rows") or diffs.get("diffs") or []
 
     return {
         "metrics": metrics,
         "path": path,
-        "diffs": diff_objects,
+        "diffs": diff_rows,
         "narrative": nar.get("summary") if nar and nar.get("ok") else None,
     }
+
 
 
 @app.get("/lineage-api/audit/balances")

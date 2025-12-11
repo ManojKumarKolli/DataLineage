@@ -469,33 +469,59 @@ class LineageService:
                     return {"ok": False, "error": "Account id must be numeric."}
                 acct = int(key)
 
+                # base rows
                 def _row(tbl):
                     cur.execute(f"""
-                      SELECT account_id, customer_id, account_type, balance FROM {tbl} WHERE account_id=?
+                    SELECT account_id, customer_id, account_type, balance
+                    FROM {tbl}
+                    WHERE account_id=?
                     """, (acct,))
                     return cur.fetchone()
 
                 raw_row = _row("raw_accounts")
                 stg_row = _row("stage_accounts")
 
+                if not raw_row and not stg_row:
+                    return {"ok": False, "error": "Account not found in RAW or STAGE."}
+
                 # account-level fees
                 cur.execute("SELECT SUM(fee_amount) FROM stage_fees WHERE account_id=?", (acct,))
                 r = cur.fetchone(); acct_fees = r[0] if r else 0.0
 
+                # customer-level mart total and all accounts for that customer (stage)
+                cust_id = None
                 if stg_row:
                     cust_id = stg_row[1]
+                elif raw_row:
+                    cust_id = raw_row[1]
+
+                mart_total = None
+                customer_accounts_stage: list[tuple] = []
+                if cust_id is not None:
                     cur.execute("SELECT total_balance FROM mart_customer_balances WHERE customer_id=?", (cust_id,))
                     rr = cur.fetchone()
                     mart_total = rr[0] if rr else None
-                else:
-                    mart_total = None
+
+                    # All accounts for this customer at stage (for LLM reasoning)
+                    cur.execute("""
+                    SELECT account_id, account_type, balance
+                    FROM stage_accounts
+                    WHERE customer_id=?
+                    ORDER BY balance DESC
+                    """, (cust_id,))
+                    customer_accounts_stage = cur.fetchall()
 
                 path = ["raw.accounts_raw","stage.accounts_stg","mart.customer_balances"]
                 return {
-                    "ok": True, "by":"account", "key": acct,
-                    "raw": raw_row, "stage": stg_row, "fees": acct_fees,
+                    "ok": True,
+                    "by": "account",
+                    "key": acct,
+                    "raw": raw_row,
+                    "stage": stg_row,
+                    "fees": acct_fees,
                     "mart_customer_total": mart_total,
-                    "lineage_path": path
+                    "customer_accounts_stage": customer_accounts_stage,
+                    "lineage_path": path,
                 }
 
             else:
@@ -779,24 +805,84 @@ class LineageService:
     # -------- LLM narrative --------
     def narrative(self, payload: Dict[str, Any], model_name: Optional[str]) -> Dict[str, Any]:
         """
-        payload should contain the output of balances_across_stages or diffs.
+        payload should contain:
+          - focus_by, identifier, issue
+          - metrics: numeric drift info
+          - semantic_hint: English hint about aggregation (e.g., mart is per-customer)
+          - tables: list of {title, columns, rows}
         Returns a short human narrative (if LLM configured).
         """
         if not capgemini_llm:
             return {"ok": False, "error": "LLM client not configured"}
+
+        focus_by = payload.get("focus_by")
+        ident = payload.get("identifier")
+        issue = payload.get("issue") or "Balances are not matching across stages."
+        metrics = payload.get("metrics", {})
+        semantic_hint = payload.get("semantic_hint", "")
+        tables = payload.get("tables", [])
+
+        # Small helper to render tables in a compact, LLM-friendly markdown form
+        def _tabulate_block(title: str, cols: List[str], rows: List[Sequence[Any]], limit: int = 8) -> str:
+            if not cols:
+                return f"\n### {title}\n(no columns)\n"
+            hdr = "| " + " | ".join(cols) + " |"
+            sep = "| " + " | ".join(["---"] * len(cols)) + " |"
+            body_lines = []
+            for r in rows[:limit]:
+                body_lines.append("| " + " | ".join("" if v is None else str(v) for v in r) + " |")
+            if not body_lines:
+                body_lines = ["| (no rows) |"]
+            return f"\n### {title}\n" + "\n".join([hdr, sep] + body_lines) + "\n"
+
+        table_blocks = ""
+        for t in tables:
+            title = t.get("title") or "Table"
+            cols = t.get("columns") or []
+            rows = t.get("rows") or []
+            table_blocks += _tabulate_block(title, cols, rows)
+
         try:
             prompt = (
-                "You are a data lineage investigator.\n"
-                "Given JSON describing balances/fees across raw→stage→mart and any diffs, "
-                "write ONE short, executive summary (<= 80 words) explaining what's off and likely cause.\n\n"
-                f"DATA:\n{json.dumps(payload, indent=2)}\n\n"
+                "You are a senior data lineage & reconciliation analyst.\n"
+                "Your job is to explain why balances differ across RAW, STAGE and MART layers.\n"
+                "You must base your reasoning ONLY on the data provided (metrics and tables).\n"
+                "If the MART total clearly looks like a sum of multiple accounts "
+                "(e.g., checking + savings for the same customer), call that out explicitly.\n"
+                "Do NOT invent causes that are not supported by the numbers.\n\n"
+                f"FOCUS ENTITY:\n"
+                f"- focus_by: {focus_by}\n"
+                f"- identifier: {ident}\n\n"
+                f"USER ISSUE (free text):\n{issue}\n\n"
+                f"SEMANTIC HINT:\n{semantic_hint}\n\n"
+                f"METRICS (JSON):\n{json.dumps(metrics, indent=2)}\n\n"
+                f"TABLES:\n{table_blocks}\n\n"
+                "Write ONE or TWO plain English sentences (max ~80 words total):\n"
+                "- Explain what is off across stages.\n"
+                "- Explain the most likely cause, using concrete terms like 'sum of checking and savings accounts'.\n"
+                "- Do NOT use markdown, bullets, or code.\n\n"
                 "SUMMARY:"
             )
+
             text = capgemini_llm(
                 prompt=prompt,
-                system_prompt="Be concise, factual, and helpful. No bullets; one paragraph.",
-                model_name=model_name
+                system_prompt=(
+                    "You are a concise, factual analytics copilot. "
+                    "Respond with one or two sentences in plain English. "
+                    "Reference specific stages (raw, stage, mart) and account types if visible."
+                ),
+                model_name=model_name,
             )
-            return {"ok": True, "summary": text.strip()[:800]}
+            if not text:
+                return {"ok": False, "error": "empty LLM response"}
+            summary = text.strip()
+            # Take the first 2 non-empty lines at most
+            lines = [ln.strip() for ln in summary.splitlines() if ln.strip()]
+            if not lines:
+                return {"ok": False, "error": "no non-empty lines from LLM"}
+            merged = " ".join(lines[:2])
+            return {"ok": True, "summary": merged[:800]}
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    
