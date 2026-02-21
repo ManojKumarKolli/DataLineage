@@ -15,7 +15,42 @@
   <script src="app.js" defer></script>
 </head>
 <body>
-  <div class="app">
+    <!-- ── Investigation Loading Overlay ── -->
+    <div id="investigationOverlay" class="investigation-overlay hidden">
+      <div class="loading-card">
+        <div class="spinner"></div>
+        <h2>Investigating...</h2>
+        <div class="progress-steps">
+          <div class="step active" data-step="0">
+            <div class="step-circle">1</div>
+            <span>Parsing Question</span>
+          </div>
+          <div class="step" data-step="1">
+            <div class="step-circle">2</div>
+            <span>Extracting Entities</span>
+          </div>
+          <div class="step" data-step="2">
+            <div class="step-circle">3</div>
+            <span>Generating Queries</span>
+          </div>
+          <div class="step" data-step="3">
+            <div class="step-circle">4</div>
+            <span>Running Analysis</span>
+          </div>
+          <div class="step" data-step="4">
+            <div class="step-circle">✓</div>
+            <span>Complete</span>
+          </div>
+        </div>
+        <div class="status-message">Step 1 of 4: Parsing your question...</div>
+      </div>
+    </div>
+
+    <!-- Toasts Container -->
+    <div id="toasts" class="toasts-container"></div>
+
+    <!-- Tooltip -->
+    <div id="tooltip" class="tooltip hidden"></div>
 
     <!-- ── Header ── -->
     <header class="header">
@@ -44,23 +79,17 @@
           <h2 class="card-title">Investigation</h2>
 
           <div class="form-group">
-            <label class="label">Describe the Issue</label>
+            <label class="label">Ask a Question</label>
             <textarea id="issueText" class="textarea"
-              placeholder="What data inconsistency are you investigating?"></textarea>
+              placeholder="What would you like to investigate?&#10;&#10;Examples:&#10;• Show balance for account 102&#10;• Transactions for customer Asha Patel?&#10;• Why is balance different?&#10;• List all fee discrepancies"></textarea>
           </div>
 
-          <div class="form-row">
-            <div class="form-group">
-              <label class="label">Focus By</label>
-              <select id="focusBy" class="select">
-                <option value="account">Account</option>
-                <option value="customer">Customer</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="label">Identifier</label>
-              <input id="focusId" class="input" placeholder="Account ID or Name" />
-            </div>
+          <div id="quickPrompts" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">
+            <button class="quick-prompt" data-prompt="What's the balance discrepancy between raw and mart for Q4?">Q4 Balance Drift</button>
+            <button class="quick-prompt" data-prompt="Show me all accounts with discrepancies">Accounts with Issues</button>
+            <button class="quick-prompt" data-prompt="What's the balance issue with account 102?">Account 102</button>
+            <button class="quick-prompt" data-prompt="List all transactions for customer Asha Patel">Customer Asha</button>
+            <button class="quick-prompt" data-prompt="How many accounts have more than 1% variance?">High Variance</button>
           </div>
 
           <button id="runInvestigation" class="btn btn-primary btn-block">Investigate</button>
@@ -167,8 +196,5 @@
       </section>
     </main>
   </div>
-
-  <div id="tooltip" class="tooltip hidden"></div>
-  <div id="toasts"  class="toasts"></div>
 </body>
 </html>

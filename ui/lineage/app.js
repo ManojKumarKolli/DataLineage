@@ -2,8 +2,6 @@ const qs = (s, el=document)=>el.querySelector(s);
 const qsa = (s, el=document)=>Array.from(el.querySelectorAll(s));
 
 const issueText = qs('#issueText');
-const focusBy = qs('#focusBy');
-const focusId = qs('#focusId');
 const runBtn = qs('#runInvestigation');
 const healthBtn = qs('#healthBtn');
 const stageStrip = qs('#stageStrip');
@@ -265,52 +263,56 @@ async function loadPreview(){
 }
 if (refreshPreview) refreshPreview.addEventListener('click', loadPreview);
 
+/* ═══════════════════════ Quick Prompts ═══════════════════════ */
+qsa('.quick-prompt').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    const prompt = e.target.dataset.prompt;
+    if (prompt) {
+      issueText.value = prompt;
+      issueText.focus();
+      setTimeout(() => runBtn.click(), 100);
+    }
+  });
+});
+
 /* ═══════════════════════ Investigation Run ═══════════════════════ */
 if (runBtn){
   runBtn.addEventListener('click', async ()=>{
-    const issue = (issueText.value||'').trim();
-    const fb    = (focusBy.value||'account').trim();
-    const id    = (focusId.value||'').trim();
-    if (!id){ toast('Please enter an identifier (e.g. account id).', 'err'); return; }
+    const question = (issueText.value||'').trim();
+    if (!question){ toast('Please ask a question about your data.', 'err'); return; }
 
     runBtn.disabled = true;
     runBtn.classList.add('loading');
-    runBtn.innerHTML = '<span style="display:inline-block;animation:spin 0.8s linear infinite;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;width:14px;height:14px;"></span> Investigating…';
-
-    if (!qs('#btnSpinStyle')) {
-      const s = document.createElement('style');
-      s.id = 'btnSpinStyle';
-      s.textContent = `@keyframes spin{to{transform:rotate(360deg)}}`;
-      document.head.appendChild(s);
-    }
 
     showLoadingOverlay();
-
-    const t0 = performance.now(); // ← start timer
+    const t0 = performance.now();
 
     try{
-      const params = new URLSearchParams({ focusBy: fb, identifier: id, issue });
-      const j = await getJSON('/lineage-api/reconcile?' + params.toString());
-      const elapsed = ((performance.now() - t0) / 1000).toFixed(2); // ← elapsed seconds
+      const r = await fetch('/lineage-api/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question })
+      });
+      if (!r.ok){ const txt = await r.text(); throw new Error(txt || r.statusText); }
+      const j = await r.json();
+      const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
 
       renderMetrics(j.metrics || {});
-      renderNarrative(j.narrative || '', fb, id);
+      renderNarrative(j.narrative || '');
       renderPath(j.path || []);
       renderDiffTable(j.diffs || []);
       renderQueries(j.queries || [], elapsed);
       renderResults(j.results || null);
 
       toast(`Investigation complete — ${elapsed}s`, 'ok');
-
       qs('[data-tab="investigation"]')?.click();
     }catch(err){
       console.error(err);
-      toast('Investigation failed', 'err');
+      toast('Investigation failed: ' + (err.message || 'Unknown error'), 'err');
     }finally{
       hideLoadingOverlay();
       runBtn.disabled = false;
       runBtn.classList.remove('loading');
-      runBtn.textContent = 'Investigate';
     }
   });
 }
@@ -340,6 +342,16 @@ function renderMetrics(m){
       tag:`period: ${m.window || 'full'}`
     });
   }
+  // Fallback: individual stage metrics (account-level reconcile response)
+  if (!blocks.length && (m.raw_balance != null || m.stage_balance != null || m.mart_customer_total != null)){
+    if (m.raw_balance != null)
+      blocks.push({ label:'Raw Balance',   value: formatCurrency(m.raw_balance),          tag:'' });
+    if (m.stage_balance != null)
+      blocks.push({ label:'Stage Balance', value: formatCurrency(m.stage_balance),         tag: m.delta_stage_vs_raw ? `Δ ${formatCurrency(m.delta_stage_vs_raw)}` : '' });
+    if (m.mart_customer_total != null)
+      blocks.push({ label:'Mart Total',    value: formatCurrency(m.mart_customer_total),   tag: m.fees_total ? `Fees: ${formatCurrency(m.fees_total)}` : '' });
+  }
+
   if (!blocks.length){
     summaryMetrics.innerHTML = '<small style="color:var(--text-muted)">No metrics available for this focus.</small>';
     return;
@@ -354,8 +366,8 @@ function renderMetrics(m){
 }
 
 /* ═══════════════════════ Render Narrative ═══════════════════════ */
-function renderNarrative(text, fb, id){
-  narrativeEl.textContent = text || `No explicit narrative returned for ${fb} "${id}".`;
+function renderNarrative(text){
+  narrativeEl.textContent = text || 'No narrative available for this investigation.';
 }
 
 /* ═══════════════════════ Render Lineage Path ═══════════════════════ */
@@ -364,24 +376,66 @@ function renderPath(path){
     lineagePathEl.innerHTML = '<small style="color:var(--text-muted)">No lineage path returned for this entity.</small>';
     return;
   }
-  lineagePathEl.innerHTML = path.map((p, idx)=>{
-    const label    = p.label || p.stage;
-    const stage    = p.stage || '';
-    const bal      = p.balance != null ? formatCurrency(p.balance) : '—';
-    const tx       = p.txn_count != null ? `${p.txn_count.toLocaleString()} txns` : '';
-    const d        = p.delta_balance != null ? formatCurrency(p.delta_balance) : null;
-    const dPct     = p.delta_percent != null ? (p.delta_percent*100).toFixed(2)+'%' : null;
-    const deltaStr = (d||dPct) ? `${d||''} (${dPct||'—'})` : '—';
-    return `
-      <div class="path-node" style="animation-delay:${0.1 + idx*0.15}s">
-        <h4>${escapeHtml(label)}</h4>
-        <div class="stage">${escapeHtml(stage)}</div>
-        <div class="delta"><span class="delta-label">Balance</span><span class="delta-value">${bal}</span></div>
-        ${tx ? `<div class="delta"><span class="delta-label">Volume</span><span class="delta-value">${tx}</span></div>` : ''}
-        <div class="delta"><span class="delta-label">Δ prev</span><span class="delta-value">${escapeHtml(deltaStr)}</span></div>
-      </div>
-    `;
-  }).join('');
+
+  // Stage label → display name + icon
+  const stageInfo = {
+    raw:   { icon: '⬡', name: 'Source',  badge: 'RAW'     },
+    stage: { icon: '⬢', name: 'Staging', badge: 'STAGE'   },
+    mart:  { icon: '◆', name: 'Mart',    badge: 'MART'    },
+  };
+
+  const pieces = [];
+
+  path.forEach((p, idx) => {
+    const label   = p.label || p.stage;
+    const stage   = (p.stage || '').toLowerCase();
+    const bal     = p.balance != null ? formatCurrency(p.balance) : '—';
+    const tx      = p.txn_count != null ? p.txn_count.toLocaleString() + ' txns' : '';
+    const d       = p.delta_balance  != null ? formatCurrency(p.delta_balance)  : null;
+    const dPct    = p.delta_percent  != null ? (p.delta_percent * 100).toFixed(2) + '%' : null;
+
+    const info     = stageInfo[stage] || { icon: '●', name: '', badge: stage.toUpperCase() };
+    const isPos    = p.delta_balance != null && p.delta_balance > 0;
+    const isNeg    = p.delta_balance != null && p.delta_balance < 0;
+    const deltaClass = isPos ? 'delta-change' : isNeg ? 'delta-change-neg' : '';
+    const deltaSign  = isPos ? '+' : '';
+
+    const deltaRow = (d || dPct) ? `
+      <div class="delta">
+        <span class="delta-label">Δ prev</span>
+        <span class="delta-value ${deltaClass}">${deltaSign}${d || ''}${dPct ? ' <span style="opacity:0.7;font-size:10px;">('+dPct+')</span>' : ''}</span>
+      </div>` : '';
+
+    const node = `
+      <div class="path-node" data-stage="${escapeHtml(stage)}" style="animation-delay:${0.05 + idx*0.17}s">
+        <div class="path-node-top"></div>
+        <div class="path-node-body">
+          <div class="path-node-badge">${escapeHtml(info.icon)} ${escapeHtml(info.badge)}</div>
+          <h4>${escapeHtml(label)}</h4>
+          <div class="stage">${escapeHtml(info.name)}</div>
+          <div class="path-node-divider"></div>
+          <div class="delta">
+            <span class="delta-label">Balance</span>
+            <span class="delta-value delta-balance-val">${escapeHtml(bal)}</span>
+          </div>
+          ${tx ? `<div class="delta"><span class="delta-label">Volume</span><span class="delta-value">${escapeHtml(tx)}</span></div>` : ''}
+          ${deltaRow}
+        </div>
+      </div>`;
+
+    pieces.push(node);
+
+    // Insert connector between nodes
+    if (idx < path.length - 1) {
+      pieces.push(`
+        <div class="path-connector">
+          <div class="path-connector-dot"></div>
+          <div class="path-connector-dot"></div>
+        </div>`);
+    }
+  });
+
+  lineagePathEl.innerHTML = pieces.join('');
 }
 
 /* ═══════════════════════ Render Diff Table ═══════════════════════ */
