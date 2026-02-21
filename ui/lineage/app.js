@@ -75,71 +75,70 @@ let loadingOverlay = null;
 let loadingTimer   = null;
 
 function showLoadingOverlay(){
-  if (loadingOverlay) return;
-
-  loadingOverlay = document.createElement('div');
-  loadingOverlay.className = 'investigation-loading';
-  loadingOverlay.innerHTML = `
-    <div class="loading-card">
-      <div class="loading-spinner"></div>
-      <div class="loading-title">Investigating…</div>
-      <p style="font-size:13px;color:var(--text-muted);margin-bottom:4px;">Running lineage reconciliation</p>
-      <div class="loading-steps">
-        ${LOADING_STEPS.map(s=>`
-          <div class="loading-step" id="${s.id}">
-            <div class="step-icon">○</div>
-            <span>${s.label}</span>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  `;
-  document.body.appendChild(loadingOverlay);
-
-  // Animate steps progressively
-  let currentStep = 0;
-  const markDone = (idx) => {
-    const el = qs(`#${LOADING_STEPS[idx].id}`, loadingOverlay);
-    if (!el) return;
-    el.classList.remove('active');
-    el.classList.add('done');
-    el.querySelector('.step-icon').textContent = '✓';
-  };
-  const markActive = (idx) => {
-    const el = qs(`#${LOADING_STEPS[idx].id}`, loadingOverlay);
-    if (!el) return;
-    el.classList.add('active');
-    el.querySelector('.step-icon').textContent = '↻';
-  };
-
-  markActive(0);
-  const delays = [0, 600, 1300, 2000, 2700];
-  LOADING_STEPS.forEach((_, idx) => {
-    setTimeout(() => {
-      if (idx > 0) markDone(idx - 1);
-      if (idx < LOADING_STEPS.length) markActive(idx);
-    }, delays[idx] || idx * 650);
+  const overlay = qs('#investigationOverlay');
+  if (!overlay) return;
+  
+  overlay.classList.remove('hidden');
+  const steps = qsa('.step', overlay);
+  const statusMsg = qs('.status-message', overlay);
+  
+  // Reset all steps to initial state
+  steps.forEach(step => {
+    step.classList.remove('active', 'completed');
+    const circle = qs('.step-circle', step);
+    const label = step.dataset.step;
+    circle.textContent = String(parseInt(label) + 1);
   });
-
-  loadingTimer = setTimeout(() => {
-    const last = LOADING_STEPS.length - 1;
-    markDone(last);
-  }, 3000);
+  
+  // Mark first step as active
+  if (steps[0]) {
+    steps[0].classList.add('active');
+    if (statusMsg) statusMsg.textContent = 'Step 1 of 5: Parsing your question...';
+  }
+  
+  // Animate steps progressively
+  const stepMessages = [
+    'Step 1 of 5: Parsing your question...',
+    'Step 2 of 5: Extracting entities...',
+    'Step 3 of 5: Generating queries...',
+    'Step 4 of 5: Running analysis...',
+    'Step 5 of 5: Complete!'
+  ];
+  
+  const delays = [800, 1600, 2400, 3200, 4000];
+  
+  steps.forEach((step, idx) => {
+    setTimeout(() => {
+      // Mark previous as complete
+      if (idx > 0) {
+        steps[idx - 1].classList.remove('active');
+        steps[idx - 1].classList.add('completed');
+        const prevCircle = qs('.step-circle', steps[idx - 1]);
+        prevCircle.textContent = '✓';
+      }
+      // Mark current as active
+      step.classList.add('active');
+      if (statusMsg) statusMsg.textContent = stepMessages[idx];
+    }, delays[idx]);
+  });
+  
+  // Mark last step as complete
+  setTimeout(() => {
+    if (steps[4]) {
+      steps[4].classList.remove('active');
+      steps[4].classList.add('completed');
+      const lastCircle = qs('.step-circle', steps[4]);
+      lastCircle.textContent = '✓';
+      if (statusMsg) statusMsg.textContent = 'Investigation complete!';
+    }
+  }, 4800);
 }
 
 function hideLoadingOverlay(){
-  clearTimeout(loadingTimer);
-  if (!loadingOverlay) return;
-  loadingOverlay.style.animation = 'overlayOut 0.3s ease forwards';
-  setTimeout(() => {
-    if (loadingOverlay) { loadingOverlay.remove(); loadingOverlay = null; }
-  }, 320);
+  const overlay = qs('#investigationOverlay');
+  if (!overlay) return;
+  overlay.classList.add('hidden');
 }
-
-// inject overlayOut animation
-const overlayOutStyle = document.createElement('style');
-overlayOutStyle.textContent = `@keyframes overlayOut { from{opacity:1}to{opacity:0} }`;
-document.head.appendChild(overlayOutStyle);
 
 /* ═══════════════════════ API Helpers ═══════════════════════ */
 async function getJSON(url){
