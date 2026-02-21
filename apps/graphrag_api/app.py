@@ -434,11 +434,84 @@ def lineage_reconcile_entity(
     # 4) Final shape for UI
     diff_rows = diffs.get("rows") or diffs.get("diffs") or []
 
+    # 5) Build queries used for investigation
+    queries = []
+    results = []
+
+    # Add the diffs query
+    if fb == "customer":
+        cust_id = diffs.get("key")
+        query_text = f"""
+SELECT a.account_id,
+       COALESCE(r.balance,0) AS raw_balance,
+       COALESCE(s.balance,0) AS stage_balance,
+       (COALESCE(s.balance,0) - COALESCE(r.balance,0)) AS delta
+FROM (SELECT account_id FROM stage_accounts WHERE customer_id={cust_id}
+      UNION
+      SELECT account_id FROM raw_accounts WHERE customer_id={cust_id}) a
+LEFT JOIN raw_accounts   r ON r.account_id = a.account_id
+LEFT JOIN stage_accounts s ON s.account_id = a.account_id
+ORDER BY ABS(delta) DESC, a.account_id
+        """.strip()
+        queries.append({"type": "SQL", "query": query_text})
+        results.append({
+            "name": "Raw vs Stage Balances by Account",
+            "columns": diffs.get("columns", ["account_id","raw_balance","stage_balance","delta"]),
+            "rows": diff_rows
+        })
+    elif fb == "account":
+        acct = diffs.get("key")
+        query_text = f"""
+SELECT
+  r.account_id,
+  r.balance AS raw_balance,
+  s.balance AS stage_balance,
+  (COALESCE(s.balance,0) - COALESCE(r.balance,0)) AS delta
+FROM raw_accounts r
+LEFT JOIN stage_accounts s ON s.account_id = r.account_id
+WHERE r.account_id={acct}
+        """.strip()
+        queries.append({"type": "SQL", "query": query_text})
+        results.append({
+            "name": "Raw vs Stage Balance for Account",
+            "columns": diffs.get("columns", ["account_id","raw_balance","stage_balance","delta"]),
+            "rows": diff_rows
+        })
+
+    # Add balance queries
+    if fb == "account":
+        acct = key
+        balance_query = f"""
+SELECT account_id, customer_id, account_type, balance
+FROM raw_accounts
+WHERE account_id={acct}
+        """.strip()
+        queries.append({"type": "SQL", "query": balance_query})
+        
+        stage_query = f"""
+SELECT account_id, customer_id, account_type, balance
+FROM stage_accounts
+WHERE account_id={acct}
+        """.strip()
+        queries.append({"type": "SQL", "query": stage_query})
+    elif fb == "customer":
+        cust_id = key
+        balance_query = f"""
+SELECT customer_id, full_name,
+       (SELECT SUM(balance) FROM raw_accounts WHERE customer_id={cust_id}) AS raw_sum,
+       (SELECT SUM(balance) FROM stage_accounts WHERE customer_id={cust_id}) AS stage_sum
+FROM raw_customers
+WHERE customer_id={cust_id}
+        """.strip()
+        queries.append({"type": "SQL", "query": balance_query})
+
     return {
         "metrics": metrics,
         "path": path,
         "diffs": diff_rows,
         "narrative": nar.get("summary") if nar and nar.get("ok") else None,
+        "queries": queries,
+        "results": results,
     }
 
 

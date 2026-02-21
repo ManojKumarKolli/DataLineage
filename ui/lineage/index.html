@@ -4,159 +4,171 @@
   <meta charset="UTF-8" />
   <title>MCPilot • Lineage Investigator</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/github.min.css" />
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js" defer></script>
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      if (window.hljs) hljs.highlightAll();
-    });
+    document.addEventListener('DOMContentLoaded', () => { if (window.hljs) hljs.highlightAll(); });
   </script>
   <script src="app.js" defer></script>
 </head>
 <body>
   <div class="app">
-    <!-- Top bar -->
-    <header class="topbar glass">
-      <div class="brand">
-        <div class="logo-pulse"></div>
-        <div>
-          <h1>MCPilot Lineage</h1>
-          <span class="sub">End-to-end balance & data flow investigation</span>
+
+    <!-- ── Header ── -->
+    <header class="header">
+      <div class="header-content">
+        <div class="logo-section">
+          <div class="logo"></div>
+          <div>
+            <h1 class="title">MCPilot Lineage</h1>
+            <p class="subtitle">Data Lineage &amp; Balance Reconciliation</p>
+          </div>
         </div>
-      </div>
-      <div class="controls">
-        <div class="control-block">
-          <label class="label">
-            Lineage Mode
-            <span class="info" data-tooltip="This view shows how balances and metrics move from RAW → STAGE → MART, and where they drift.">ⓘ</span>
-          </label>
-          <div class="pill">Balance & KPI Lineage</div>
+        <div class="header-controls">
+          <button id="healthBtn" class="btn btn-secondary">Health</button>
+          <button id="seedBtn"   class="btn btn-secondary">Demo Data</button>
         </div>
-        <button id="healthBtn" class="soft">API Health</button>
-        <button id="seedBtn" class="soft" title="Load demo lineage data">
-            Seed demo data
-        </button>
       </div>
     </header>
 
-    <main class="main">
-      <!-- LEFT: Controls & overview -->
-      <section class="column left glass">
-        <!-- Investigation header -->
-        <section class="panel">
-          <div class="panel-head">
-            <h2>
-              Investigation
-              <span class="info" data-tooltip="Describe a data issue and I’ll reconcile RAW, STAGE and MART for you.">ⓘ</span>
-            </h2>
-          </div>
-          <div class="investigation">
-            <label class="field-label">
-              Describe the issue
-              <span class="info" data-tooltip="Example: “Balances for account 102 look too high” or “Customer Asha Patel’s balance changed between stage and mart”.">ⓘ</span>
-            </label>
-            <textarea id="issueText" rows="3" placeholder="e.g. Balances for account 102 are not matching downstream mart…"></textarea>
+    <!-- ── Main Layout ── -->
+    <main class="container">
 
-            <div class="field-row">
-              <div class="field">
-                <label class="field-label">
-                  Focus by
-                  <span class="info" data-tooltip="Investigate by account, customer, or entire portfolio.">ⓘ</span>
-                </label>
-                <select id="focusBy">
-                  <option value="account">Account</option>
-                  <option value="customer">Customer</option>
-                  <option value="portfolio">Portfolio</option>
-                </select>
-              </div>
-              <div class="field">
-                <label class="field-label">
-                  Identifier
-                  <span class="info" data-tooltip="Account id, customer name, or portfolio name (depending on focus).">ⓘ</span>
-                </label>
-                <input id="focusId" placeholder="e.g. 102 or Asha Patel" />
-              </div>
+      <!-- ── Sidebar ── -->
+      <aside class="sidebar">
+
+        <div class="card">
+          <h2 class="card-title">Investigation</h2>
+
+          <div class="form-group">
+            <label class="label">Describe the Issue</label>
+            <textarea id="issueText" class="textarea"
+              placeholder="What data inconsistency are you investigating?"></textarea>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="label">Focus By</label>
+              <select id="focusBy" class="select">
+                <option value="account">Account</option>
+                <option value="customer">Customer</option>
+              </select>
             </div>
-
-            <button id="runInvestigation" class="primary">Run Lineage Investigation</button>
+            <div class="form-group">
+              <label class="label">Identifier</label>
+              <input id="focusId" class="input" placeholder="Account ID or Name" />
+            </div>
           </div>
-        </section>
 
-        <!-- Stage KPIs -->
-        <section class="panel">
-          <div class="panel-head">
-            <h2>
-              Stage Overview
-              <span class="info" data-tooltip="High-level metrics for each pipeline stage: rows, total balance, and data quality issues.">ⓘ</span>
-            </h2>
-          </div>
+          <button id="runInvestigation" class="btn btn-primary btn-block">Investigate</button>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">Stage Overview</h2>
           <div id="stageStrip" class="stage-strip">
             <!-- filled by JS -->
           </div>
-        </section>
+        </div>
 
-        <!-- Sample tables preview (now in its own scrollable grid) -->
-        <section class="panel">
-          <div class="panel-head">
-            <h2>
-              Sample Tables
-              <span class="info" data-tooltip="Peek into RAW, STAGE and MART tables to see how the data actually looks.">ⓘ</span>
-            </h2>
-            <button id="refreshPreview" class="soft small">Refresh</button>
-          </div>
-          <div id="previewGrid" class="preview-grid">
-            <!-- cards filled by JS -->
-          </div>
-        </section>
-      </section>
+      </aside>
 
-      <!-- RIGHT: Results & lineage path -->
-      <section class="column right glass">
-        <!-- Summary & narrative -->
-        <section class="panel">
-          <div class="panel-head">
-            <h2>
-              Summary & Narrative
-              <span class="info" data-tooltip="Automated reconciliation summary and human-style explanation.">ⓘ</span>
-            </h2>
-          </div>
-          <div id="summaryMetrics" class="metrics-row">
-            <!-- headline metrics filled by JS -->
-          </div>
-          <div id="narrative" class="narrative"></div>
-        </section>
+      <!-- ── Main Content ── -->
+      <section class="main-content">
+        <div class="card card-full">
 
-        <!-- Sankey/lineage strip (textual for now) -->
-        <section class="panel">
-          <div class="panel-head">
-            <h2>
-              Lineage Path
-              <span class="info" data-tooltip="How the selected entity flows across RAW → STAGE → MART, with deltas.">ⓘ</span>
-            </h2>
+          <!-- Tab bar -->
+          <div class="tabs-header">
+            <button class="tab-btn active" data-tab="investigation">Investigation Results</button>
+            <button class="tab-btn" data-tab="queries">Queries &amp; Results</button>
+            <button class="tab-btn" data-tab="detailed">Detailed Analysis</button>
+            <button class="tab-btn" data-tab="tables">Sample Tables</button>
           </div>
-          <div id="lineagePath" class="lineage-path">
-            <!-- small visual path cards -->
-          </div>
-        </section>
 
-        <!-- Detailed diffs -->
-        <section class="panel">
-          <div class="panel-head">
-            <h2>
-              Detailed Diffs
-              <span class="info" data-tooltip="Per-account / per-metric differences across stages, sorted by impact.">ⓘ</span>
-            </h2>
-            <div class="panel-actions">
-              <button id="exportCsv" class="soft small">Export CSV</button>
+          <!-- ── Tab 1: Investigation Results ── -->
+          <div id="investigation" class="tab-content active">
+            <div class="results-grid">
+
+              <div class="results-section">
+                <h3 class="section-title">Summary &amp; Metrics</h3>
+                <div id="summaryMetrics" class="metrics-container"></div>
+              </div>
+
+              <div class="results-section">
+                <h3 class="section-title">Analysis Narrative</h3>
+                <div id="narrative" class="narrative-box"></div>
+              </div>
+
+              <div class="results-section">
+                <h3 class="section-title">Data Lineage Path</h3>
+                <div id="lineagePath" class="lineage-flow"></div>
+              </div>
+
             </div>
           </div>
-          <div id="diffTable" class="tablewrap"></div>
-        </section>
+
+          <!-- ── Tab 2: Queries & Results ── -->
+          <div id="queries" class="tab-content">
+            <div class="query-results-container">
+
+              <div class="query-section">
+                <div class="section-header">
+                  <h3 class="section-title">Generated Queries</h3>
+                  <button id="copyQueries" class="btn btn-sm hidden">Copy All</button>
+                </div>
+                <div id="queriesContainer" class="queries-list">
+                  <p class="placeholder">Run an investigation to see queries</p>
+                </div>
+              </div>
+
+              <div class="results-section-full">
+                <div class="section-header">
+                  <h3 class="section-title">Query Results</h3>
+                  <button id="copyResults" class="btn btn-sm hidden">Copy All</button>
+                </div>
+                <div id="resultsContainer" class="results-list">
+                  <p class="placeholder">Run an investigation to see results</p>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ── Tab 3: Detailed Analysis ── -->
+          <div id="detailed" class="tab-content">
+            <div class="detailed-section">
+              <div class="section-header">
+                <h3 class="section-title">Detailed Differences</h3>
+                <button id="exportCsv" class="btn btn-sm">Export CSV</button>
+              </div>
+              <!-- diffTable itself is the scrollable container (overflow:auto in CSS) -->
+              <div id="diffTable" class="table-container">
+                <div style="padding:40px;text-align:center;color:var(--text-muted);font-size:14px;">
+                  Run an investigation to see row-level diffs
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Tab 4: Sample Tables ── -->
+          <div id="tables" class="tab-content">
+            <div class="sample-tables-container">
+              <div class="section-header">
+                <h3 class="section-title">Database Sample Tables</h3>
+                <button id="refreshPreview" class="btn btn-sm">Refresh</button>
+              </div>
+              <div id="previewGrid" class="preview-grid-enhanced"></div>
+            </div>
+          </div>
+
+        </div>
       </section>
     </main>
   </div>
 
   <div id="tooltip" class="tooltip hidden"></div>
-  <div id="toasts" class="toasts"></div>
+  <div id="toasts"  class="toasts"></div>
 </body>
 </html>
