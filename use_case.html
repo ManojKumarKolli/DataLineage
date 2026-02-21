@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>DataGuard Copilot • NLP → Trusted Answers (Any Domain)</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- GSAP -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
+
+  <style>
+    :root{
+      --bg:#060a0f;
+      --panel:#0c1320;
+      --glass:rgba(255,255,255,.06);
+      --border:rgba(255,255,255,.12);
+      --text:#e7eef7;
+      --muted:#a6b3c2;
+
+      --b1:#4cc9f0;
+      --b2:#4361ee;
+      --b3:#b5179e;
+
+      --ok:#22c55e;
+      --warn:#f59e0b;
+      --err:#ef4444;
+
+      --shadow:0 18px 54px rgba(0,0,0,.48);
+      --radius:20px;
+      --maxw:1220px;
+    }
+
+    *{ box-sizing:border-box }
+    html,body{ height:100% }
+    body{
+      margin:0;
+      font-family:Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      color:var(--text);
+      background:
+        radial-gradient(1200px 820px at 15% -10%, #16243a 0%, #0b0f14 55%, #060a0f 100%),
+        radial-gradient(900px 620px at 88% 18%, rgba(181,23,158,.18), transparent 60%);
+      overflow-x:hidden;
+    }
+
+    /* ---------- background fx ---------- */
+    #bgfx{ position:fixed; inset:0; z-index:-3; opacity:.58; }
+    .grain{
+      position:fixed; inset:-20%;
+      z-index:-2; pointer-events:none;
+      opacity:.14;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='280'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='280' height='280' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+      animation: drift 18s linear infinite;
+    }
+    @keyframes drift{ from{transform:translate(-2%,-2%)} to{transform:translate(2%,2%)} }
+
+    /* ---------- topbar ---------- */
+    .topbar{
+      position:sticky; top:14px; z-index:20;
+      margin:14px; padding:12px 14px;
+      border-radius:16px;
+      background:linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
+      border:1px solid var(--border);
+      backdrop-filter: blur(10px);
+      box-shadow: var(--shadow);
+      max-width: calc(var(--maxw) + 28px);
+      left:0; right:0;
+    }
+    .topbar-wrap{
+      max-width: var(--maxw);
+      margin: 0 auto;
+      display:flex; align-items:center; justify-content:space-between; gap:14px;
+      width:100%;
+    }
+
+    .brand{ display:flex; align-items:center; gap:12px; min-width:260px }
+    .mark{
+      width:40px; height:40px; border-radius:14px;
+      background:conic-gradient(from 170deg, var(--b1), var(--b2), var(--b3), var(--b1));
+      box-shadow: 0 0 0 0 rgba(76,201,240,.40);
+      animation:pulse 2.8s infinite;
+    }
+    @keyframes pulse{
+      0%{ box-shadow:0 0 0 0 rgba(76,201,240,.35) }
+      70%{ box-shadow:0 0 0 18px rgba(76,201,240,0) }
+      100%{ box-shadow:0 0 0 0 rgba(76,201,240,0) }
+    }
+    .brand h1{ margin:0; font-size:16px; letter-spacing:.2px }
+    .brand small{ display:block; color:var(--muted); font-size:12px; margin-top:2px }
+
+    .nav{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+    .nav a{
+      color:#cfe6ff; text-decoration:none; font-size:13px; opacity:.86;
+      padding:8px 10px; border-radius:12px;
+      border:1px solid transparent;
+      transition:.2s;
+      white-space:nowrap;
+    }
+    .nav a:hover{ opacity:1; border-color:rgba(255,255,255,.12); background:rgba(255,255,255,.03) }
+    .nav a.cta{
+      background:linear-gradient(180deg, var(--b1), var(--b2));
+      color:white; font-weight:800; opacity:1;
+      border:0;
+      box-shadow:0 12px 30px rgba(67,97,238,.25);
+    }
+    @media (max-width: 980px){
+      .nav{ display:none }
+      .topbar{ top:8px }
+    }
+
+    /* ---------- layout ---------- */
+    main{ max-width: var(--maxw); margin:0 auto; padding: 18px 18px 90px; }
+    section{ padding: 70px 0; }
+    .grid{ display:grid; gap:18px; }
+    .two{ grid-template-columns: 1.05fr .95fr; align-items:stretch; }
+    .three{ grid-template-columns: repeat(3, 1fr); }
+    @media (max-width: 980px){ .two,.three{ grid-template-columns:1fr; } }
+
+    /* ---------- typography ---------- */
+    .kicker{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:6px 10px; border-radius:999px;
+      background:rgba(255,255,255,.04);
+      border:1px solid var(--border);
+      color:#bcd1ea; font-size:13px;
+    }
+    .dot{
+      width:8px; height:8px; border-radius:50%;
+      background:var(--ok);
+      box-shadow:0 0 0 6px rgba(34,197,94,.12);
+    }
+    .title{
+      margin:14px 0 10px;
+      font-size:56px; line-height:1.05; letter-spacing:-0.8px;
+    }
+    .accent{
+      background:linear-gradient(90deg, var(--b1), var(--b2), var(--b3));
+      -webkit-background-clip:text; background-clip:text;
+      color:transparent;
+    }
+    .sub{
+      margin:0 0 22px 0;
+      color:#cfe6ff; opacity:.92;
+      font-size:18px;
+      max-width: 62ch;
+    }
+    @media (max-width: 640px){ .title{ font-size:40px } }
+
+    /* ---------- cards ---------- */
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+    .pad{ padding:18px; }
+    .miniTitle{ margin:0 0 6px 0; font-size:13px; color:#bcd1ea; font-weight:800; letter-spacing:.2px }
+    .bigNum{ font-size:34px; margin:2px 0 6px; font-weight:900 }
+    .muted{ color:var(--muted) }
+
+    /* ---------- buttons ---------- */
+    .ctaRow{ display:flex; gap:12px; flex-wrap:wrap; align-items:center }
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:10px;
+      padding:12px 14px; border-radius:14px;
+      border:1px solid var(--border);
+      background:#0b1220;
+      color:#cfe6ff; text-decoration:none;
+      font-weight:800;
+      transition:.2s;
+      position:relative;
+      overflow:hidden;
+      isolation:isolate;
+      min-width: 180px;
+    }
+    .btn.primary{
+      border:0;
+      background:linear-gradient(180deg, var(--b1), var(--b2));
+      color:white;
+      box-shadow: 0 12px 32px rgba(67,97,238,.25);
+    }
+    .btn:hover{ transform: translateY(-1px); }
+    .btn .spark{
+      position:absolute; inset:-2px;
+      background: radial-gradient(320px 140px at var(--x, 50%) var(--y, 50%),
+        rgba(255,255,255,.18), transparent 55%);
+      opacity:0;
+      transition:.2s;
+      z-index:-1;
+    }
+    .btn:hover .spark{ opacity:1; }
+
+    /* ---------- reveal ---------- */
+    .reveal{ opacity:0; transform:translateY(14px); }
+    .reveal.on{ opacity:1; transform:translateY(0); transition:.6s cubic-bezier(.2,.8,.2,1); }
+
+    /* ---------- SECTION HEADER ---------- */
+    .secHead{
+      display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap;
+      margin-bottom:14px;
+    }
+    .secHead h2{ margin:0; font-size:26px; letter-spacing:-.2px }
+    .secHead .hint{ color:var(--muted); font-size:13px; max-width: 62ch }
+
+    /* ---------- PIPELINE (separate, very visible) ---------- */
+    .pipeline{
+      padding:20px;
+      position:relative;
+      overflow:hidden;
+    }
+    .pipeGrid{
+      display:grid;
+      grid-template-columns: 1fr 72px 1fr 72px 1fr;
+      gap:12px;
+      align-items:stretch;
+    }
+    @media (max-width: 980px){
+      .pipeGrid{ grid-template-columns:1fr; }
+      .pipeArrow{ display:none; }
+    }
+
+    .pipeBox{
+      border-radius:18px;
+      background:#0b1220;
+      border:1px solid rgba(255,255,255,.10);
+      overflow:hidden;
+      display:grid;
+      grid-template-rows:auto 1fr;
+      min-height: 230px;
+      position:relative;
+    }
+    .pipeHead{
+      padding:10px 12px;
+      display:flex; align-items:center; justify-content:space-between;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+    }
+    .pipeHead strong{ font-size:13px; letter-spacing:.2px }
+    .pipeHead span{ color:var(--muted); font-size:12px }
+
+    .miniTblWrap{ max-height: 178px; overflow:auto; }
+    .miniTbl{
+      width:100%;
+      border-collapse:collapse;
+      font-size:12px;
+    }
+    .miniTbl th,.miniTbl td{
+      padding:9px 10px;
+      border-bottom:1px solid rgba(255,255,255,.06);
+      text-align:left;
+      white-space:nowrap;
+    }
+    .miniTbl thead th{
+      position:sticky; top:0; z-index:1;
+      background:#0f1520;
+      color:#dbeafe;
+      border-bottom:1px solid rgba(255,255,255,.08);
+    }
+
+    .pipeArrow{
+      display:flex; align-items:center; justify-content:center;
+      position:relative;
+    }
+    .pipeArrow svg{ width:72px; height:230px; }
+    .flowPath{
+      stroke: rgba(143,191,255,.88);
+      stroke-width: 2.2;
+      fill:none;
+      stroke-dasharray: 6 14;
+      filter: drop-shadow(0 0 10px rgba(76,201,240,.22));
+    }
+    .flowGlow{
+      stroke: rgba(76,201,240,.40);
+      stroke-width: 4;
+      fill:none;
+      stroke-dasharray: 6 14;
+      opacity:.55;
+      filter: blur(0.3px);
+    }
+    .arrowHead{ fill: rgba(143,191,255,.95); }
+
+    /* ---------- BIG “WHAT IT DOES” STORY ---------- */
+    .story{
+      display:grid;
+      grid-template-columns: 1.05fr .95fr;
+      gap:14px;
+      align-items:stretch;
+    }
+    @media (max-width: 980px){ .story{ grid-template-columns:1fr; } }
+
+    .promptBox, .answerBox{
+      border-radius:18px;
+      border:1px solid rgba(255,255,255,.12);
+      background:#0b1220;
+      padding:14px;
+      position:relative;
+      overflow:hidden;
+      min-height: 148px;
+    }
+    .promptBox{ background:#0b1220; }
+    .answerBox{ background:#0f1626; }
+
+    .labelRow{
+      font-size:12px; color:#bcd1ea; font-weight:900; letter-spacing:.2px;
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .labelRow .tag{
+      color:var(--muted);
+      font-weight:800;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.03);
+      padding:6px 10px;
+      border-radius:999px;
+      white-space:nowrap;
+    }
+
+    .typingLine{
+      margin-top:10px;
+      font-size:15px;
+      line-height:1.45;
+      color:#e7eef7;
+    }
+    .typing{
+      border-right:2px solid rgba(255,255,255,.55);
+      padding-right:2px;
+      animation: caret 0.9s step-end infinite;
+    }
+    @keyframes caret{ 50%{ border-color: transparent } }
+
+    .kpiRow{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap:10px;
+      margin-top:10px;
+    }
+    @media (max-width: 520px){ .kpiRow{ grid-template-columns:1fr; } }
+    .kpi{
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.03);
+      border-radius:16px;
+      padding:10px 12px;
+    }
+    .kpi .k{ font-size:12px; color:#bcd1ea; font-weight:900 }
+    .kpi .v{ font-size:18px; font-weight:900; margin-top:4px }
+    .kpi .s{ font-size:12px; color:var(--muted); margin-top:2px }
+
+    /* ---------- “HOW IT WORKS” blocks (generic, not stage-focused) ---------- */
+    .flowSteps{
+      display:grid; gap:12px;
+      grid-template-columns: repeat(3, 1fr);
+    }
+    @media (max-width: 980px){ .flowSteps{ grid-template-columns:1fr; } }
+    .step{
+      border-radius:18px;
+      border:1px solid rgba(255,255,255,.12);
+      background:#0f1626;
+      padding:16px;
+      position:relative;
+      overflow:hidden;
+      opacity:0; transform: translateY(14px);
+    }
+    .step .num{
+      width:28px; height:28px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      display:flex; align-items:center; justify-content:center;
+      font-size:12px; font-weight:900;
+      background:#0b1220;
+      position:absolute; top:14px; right:14px;
+    }
+    .step h3{ margin:0 0 6px 0; font-size:16px; letter-spacing:.1px }
+    .step p{ margin:0; color:var(--muted); font-size:13px; line-height:1.4 }
+
+    /* ---------- domains ---------- */
+    .domains{ display:grid; grid-template-columns: repeat(3, 1fr); gap:14px; }
+    @media (max-width: 980px){ .domains{ grid-template-columns:1fr; } }
+    .tile{
+      border-radius:18px;
+      border:1px solid rgba(255,255,255,.12);
+      background:#0f1626;
+      padding:16px;
+      display:flex; gap:12px; align-items:flex-start;
+      opacity:0; transform: translateY(14px);
+    }
+    .ico{
+      width:40px; height:40px; border-radius:14px;
+      border:1px solid rgba(255,255,255,.12);
+      background: radial-gradient(circle at 30% 30%, rgba(76,201,240,.72), rgba(67,97,238,.30));
+      box-shadow:0 0 0 10px rgba(76,201,240,.06);
+      flex:0 0 40px;
+    }
+    .tile h4{ margin:0 0 6px 0 }
+    .tile p{ margin:0; color:var(--muted); font-size:13px; line-height:1.45 }
+
+    footer{
+      text-align:center;
+      color:var(--muted);
+      padding:24px 0 44px;
+      font-size:13px;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="bgfx" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="topbar-wrap">
+      <div class="brand">
+        <div class="mark" aria-hidden="true"></div>
+        <div>
+          <h1>DataGuard Copilot</h1>
+          <small>Prototype: NLP → SQL + governed answers • works with any data architecture</small>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <a href="#pipeline">Pipeline</a>
+        <a href="#how">How it works</a>
+        <a href="#domains">Domains</a>
+        <a class="cta" href="/ui" target="_blank" rel="noopener noreferrer">Open App</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO -->
+    <section id="home">
+      <span class="kicker reveal"><span class="dot" aria-hidden="true"></span> Generic story: many tables + complex joins → ask in English</span>
+
+      <div class="grid two" style="margin-top:14px;">
+        <div>
+          <h2 class="title reveal">
+            Turn complex data into <span class="accent">simple questions</span>.
+          </h2>
+
+          <p class="sub reveal">
+            When data spans many tables (and sometimes multiple layers), most users struggle with schema
+            and joins. DataGuard Copilot lets them ask in natural language and returns
+            <b>SQL + results + a short explanation</b>—ready for any domain.
+          </p>
+
+          <div class="ctaRow reveal">
+            <a class="btn primary magnet" href="#pipeline">
+              <span>See the Pipeline</span><span aria-hidden="true">→</span><span class="spark"></span>
+            </a>
+            <a class="btn magnet" href="#how">
+              <span>How it Works</span><span aria-hidden="true">⇣</span><span class="spark"></span>
+            </a>
+          </div>
+
+          <div class="grid three" style="margin-top:18px;">
+            <div class="card pad reveal">
+              <div class="miniTitle">Fast</div>
+              <div class="bigNum">Self-serve</div>
+              <div class="muted">No waiting for SQL experts.</div>
+            </div>
+            <div class="card pad reveal">
+              <div class="miniTitle">Clear</div>
+              <div class="bigNum">Explainable</div>
+              <div class="muted">Answer + “why” in plain English.</div>
+            </div>
+            <div class="card pad reveal">
+              <div class="miniTitle">Reusable</div>
+              <div class="bigNum">Any domain</div>
+              <div class="muted">Banking, telecom, retail, ops.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: mini story (prompt → answer) -->
+        <div class="card pad reveal">
+          <div class="story" id="story">
+            <div class="promptBox">
+              <div class="labelRow">
+                <div>User question</div>
+                <div class="tag">NLP</div>
+              </div>
+              <div class="typingLine">
+                <span id="typed" class="typing"></span>
+              </div>
+            </div>
+
+            <div class="answerBox">
+              <div class="labelRow">
+                <div>Copilot output</div>
+                <div class="tag">SQL + Summary</div>
+              </div>
+
+              <div class="kpiRow">
+                <div class="kpi">
+                  <div class="k">SQL created</div>
+                  <div class="v">✔</div>
+                  <div class="s">right tables</div>
+                </div>
+                <div class="kpi">
+                  <div class="k">Results</div>
+                  <div class="v">✔</div>
+                  <div class="s">validated rows</div>
+                </div>
+                <div class="kpi">
+                  <div class="k">Explanation</div>
+                  <div class="v">✔</div>
+                  <div class="s">plain English</div>
+                </div>
+              </div>
+            </div>
+          </div><!-- story -->
+        </div>
+      </div>
+    </section>
+
+    <!-- PIPELINE (separate, super visible) -->
+    <section id="pipeline">
+      <div class="secHead">
+        <h2 class="reveal">Pipeline (architecture-agnostic)</h2>
+        <div class="hint reveal">This demo uses sample layers, but the same pattern works with any lake/warehouse architecture.</div>
+      </div>
+
+      <div class="card pipeline reveal" id="pipeCard">
+        <div class="pipeGrid" id="pipeGrid">
+
+          <div class="pipeBox" id="p1">
+            <div class="pipeHead">
+              <strong>Data sources</strong>
+              <span>tables / files</span>
+            </div>
+            <div class="miniTblWrap">
+              <table class="miniTbl" aria-label="Sources">
+                <thead><tr><th>table</th><th>purpose</th></tr></thead>
+                <tbody>
+                  <tr><td>customers</td><td>profiles</td></tr>
+                  <tr><td>accounts</td><td>balances</td></tr>
+                  <tr><td>transactions</td><td>activity</td></tr>
+                  <tr><td>fees</td><td>charges</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="pipeArrow" aria-hidden="true">
+            <svg viewBox="0 0 72 230">
+              <path class="flowGlow" d="M12 115 C26 115, 30 115, 46 115" />
+              <path class="flowPath" d="M12 115 C26 115, 30 115, 46 115" />
+              <polygon class="arrowHead" points="54,115 45,110 45,120" />
+            </svg>
+          </div>
+
+          <div class="pipeBox" id="p2">
+            <div class="pipeHead">
+              <strong>Copilot brain</strong>
+              <span>semantic model</span>
+            </div>
+            <div class="miniTblWrap">
+              <table class="miniTbl" aria-label="Semantic model">
+                <thead><tr><th>component</th><th>does</th></tr></thead>
+                <tbody>
+                  <tr><td>semantic rules</td><td>which joins</td></tr>
+                  <tr><td>governance</td><td>safe SQL</td></tr>
+                  <tr><td>narrative</td><td>short summary</td></tr>
+                  <tr><td>(optional) flows</td><td>multi-layer checks</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="pipeArrow" aria-hidden="true">
+            <svg viewBox="0 0 72 230">
+              <path class="flowGlow" d="M12 115 C26 115, 30 115, 46 115" />
+              <path class="flowPath" d="M12 115 C26 115, 30 115, 46 115" />
+              <polygon class="arrowHead" points="54,115 45,110 45,120" />
+            </svg>
+          </div>
+
+          <div class="pipeBox" id="p3">
+            <div class="pipeHead">
+              <strong>Trusted output</strong>
+              <span>SQL + answer</span>
+            </div>
+            <div class="miniTblWrap">
+              <table class="miniTbl" aria-label="Output">
+                <thead><tr><th>output</th><th>example</th></tr></thead>
+                <tbody>
+                  <tr><td>SQL</td><td>generated</td></tr>
+                  <tr><td>table</td><td>top results</td></tr>
+                  <tr><td>summary</td><td>1 sentence</td></tr>
+                  <tr><td>next step</td><td>act faster</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- HOW IT WORKS (generic) -->
+    <section id="how">
+      <div class="secHead">
+        <h2 class="reveal">How it works (in 3 simple steps)</h2>
+        <div class="hint reveal">No “data lineage” wording here—just a generic flow that fits any domain.</div>
+      </div>
+
+      <div class="flowSteps">
+        <div class="step" id="s1">
+          <div class="num">1</div>
+          <h3>Ask</h3>
+          <p>User types a question in plain English (no schema knowledge needed).</p>
+        </div>
+
+        <div class="step" id="s2">
+          <div class="num">2</div>
+          <h3>Generate</h3>
+          <p>Copilot selects the right tables and builds the SQL using the semantic model.</p>
+        </div>
+
+        <div class="step" id="s3">
+          <div class="num">3</div>
+          <h3>Explain</h3>
+          <p>Runs the query, shows results, and summarizes the answer in one short sentence.</p>
+        </div>
+      </div>
+
+      <div class="ctaRow" style="margin-top:14px;">
+        <a class="btn primary magnet" href="/ui" target="_blank" rel="noopener noreferrer">
+          <span>Explore Semantic SQL</span><span aria-hidden="true">→</span><span class="spark"></span>
+        </a>
+        <a class="btn magnet" href="#domains">
+          <span>See Domains</span><span aria-hidden="true">→</span><span class="spark"></span>
+        </a>
+      </div>
+    </section>
+
+    <!-- DOMAINS -->
+    <section id="domains">
+      <div class="secHead">
+        <h2 class="reveal">Works across domains</h2>
+        <div class="hint reveal">Swap datasets + semantic YAML. The UX and pipeline stay the same.</div>
+      </div>
+
+      <div class="domains">
+        <div class="tile" id="d1">
+          <div class="ico" aria-hidden="true"></div>
+          <div>
+            <h4>Banking</h4>
+            <p>Balances, transactions, fees, risk—quick answers without complex joins.</p>
+          </div>
+        </div>
+
+        <div class="tile" id="d2">
+          <div class="ico" aria-hidden="true" style="background: radial-gradient(circle at 30% 30%, rgba(34,197,94,.65), rgba(67,97,238,.30));"></div>
+          <div>
+            <h4>Telecom</h4>
+            <p>Subscribers, usage, billing—self-serve analytics for business teams.</p>
+          </div>
+        </div>
+
+        <div class="tile" id="d3">
+          <div class="ico" aria-hidden="true" style="background: radial-gradient(circle at 30% 30%, rgba(245,158,11,.65), rgba(181,23,158,.28));"></div>
+          <div>
+            <h4>Retail / Ops</h4>
+            <p>Orders, inventory, SLAs—faster decisions with explainable answers.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>© DataGuard Copilot • Prototype UI demo</footer>
+  </main>
+
+  <script>
+    // ---------- Button glow ----------
+    document.querySelectorAll('.magnet').forEach(btn=>{
+      btn.addEventListener('mousemove', (e)=>{
+        const r = btn.getBoundingClientRect();
+        const x = ((e.clientX - r.left) / r.width) * 100;
+        const y = ((e.clientY - r.top) / r.height) * 100;
+        btn.style.setProperty('--x', x + '%');
+        btn.style.setProperty('--y', y + '%');
+      });
+    });
+
+    // ---------- Background particles ----------
+    (function particles(){
+      const c = document.getElementById('bgfx');
+      const ctx = c.getContext('2d');
+      let W,H,pts=[];
+      const N = 90;
+
+      function resize(){
+        W = c.width = innerWidth * devicePixelRatio;
+        H = c.height = innerHeight * devicePixelRatio;
+        c.style.width = innerWidth + 'px';
+        c.style.height = innerHeight + 'px';
+        pts = [...Array(N)].map(()=>({
+          x: Math.random()*W, y: Math.random()*H,
+          vx: (Math.random()-.5)*0.22*devicePixelRatio,
+          vy: (Math.random()-.5)*0.22*devicePixelRatio,
+          r: (Math.random()*2.1+0.7)*devicePixelRatio,
+          a: 0.20 + Math.random()*0.35
+        }));
+      }
+      resize(); addEventListener('resize', resize);
+
+      function tick(){
+        ctx.clearRect(0,0,W,H);
+        for(const p of pts){
+          p.x += p.vx; p.y += p.vy;
+          if(p.x<0||p.x>W) p.vx*=-1;
+          if(p.y<0||p.y>H) p.vy*=-1;
+          ctx.beginPath();
+          ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+          ctx.fillStyle = `rgba(140,180,255,${p.a})`;
+          ctx.fill();
+        }
+        requestAnimationFrame(tick);
+      }
+      tick();
+    })();
+
+    // ---------- Typewriter (generic, not stage-focused) ----------
+    const msg = "Show me the highest revenue customers and explain why they are highest.";
+    const typed = document.getElementById('typed');
+    let i=0;
+    (function type(){
+      typed.textContent = msg.slice(0, i++);
+      if (i <= msg.length) setTimeout(type, 24);
+    })();
+
+    // ---------- Smooth anchor nav ----------
+    document.querySelectorAll('.nav a').forEach(a=>{
+      a.addEventListener('click', (e)=>{
+        const href = a.getAttribute('href') || '';
+        if (!href.startsWith('#')) return;
+        e.preventDefault();
+        const el = document.querySelector(href);
+        el && el.scrollIntoView({ behavior:'smooth', block:'start' });
+      });
+    });
+
+    // ---------- Intersection reveal fallback ----------
+    const io = new IntersectionObserver((entries)=>{
+      entries.forEach(e=>{
+        if (e.isIntersecting){
+          e.target.classList.add('on');
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold:0.18 });
+    document.querySelectorAll('.reveal').forEach(el=> io.observe(el));
+
+    // ---------- GSAP animations (clear + visible) ----------
+    window.addEventListener('load', ()=>{
+      if (!window.gsap || !window.ScrollTrigger) return;
+      gsap.registerPlugin(ScrollTrigger);
+
+      // hero entrance
+      gsap.fromTo('.kicker', { y:10, opacity:0 }, { y:0, opacity:1, duration:.6, ease:'power2.out' });
+      gsap.fromTo('.title',  { y:18, opacity:0 }, { y:0, opacity:1, duration:.75, delay:.05, ease:'power2.out' });
+      gsap.fromTo('.sub',    { y:16, opacity:0 }, { y:0, opacity:1, duration:.65, delay:.10, ease:'power2.out' });
+      gsap.fromTo('.ctaRow', { y:14, opacity:0 }, { y:0, opacity:1, duration:.65, delay:.14, ease:'power2.out' });
+
+      // pipeline card float
+      gsap.to('#pipeCard', { y:-6, repeat:-1, yoyo:true, duration:2.6, ease:'sine.inOut' });
+
+      // dotted line motion
+      gsap.to('.flowPath, .flowGlow', { strokeDashoffset: -60, duration: 1.2, ease:'none', repeat:-1 });
+
+      // pipeline boxes highlight loop (very readable)
+      const hl = gsap.timeline({ repeat:-1, repeatDelay:0.6 });
+      hl.to('#p1', { boxShadow:'0 0 40px rgba(76,201,240,.22)', duration:.6, ease:'power2.out' })
+        .to('#p2', { boxShadow:'0 0 40px rgba(67,97,238,.22)', duration:.6, ease:'power2.out' }, '+=0.4')
+        .to('#p3', { boxShadow:'0 0 40px rgba(181,23,158,.22)', duration:.6, ease:'power2.out' }, '+=0.4')
+        .to(['#p1','#p2','#p3'], { boxShadow:'0 0 0 rgba(0,0,0,0)', duration:.5 }, '+=0.8');
+
+      // steps
+      gsap.to('#s1', { y:0, opacity:1, duration:.6, ease:'power2.out', scrollTrigger:{ trigger:'#how', start:'top 75%' } });
+      gsap.to('#s2', { y:0, opacity:1, duration:.6, delay:.10, ease:'power2.out', scrollTrigger:{ trigger:'#how', start:'top 75%' } });
+      gsap.to('#s3', { y:0, opacity:1, duration:.6, delay:.20, ease:'power2.out', scrollTrigger:{ trigger:'#how', start:'top 75%' } });
+
+      // domain tiles
+      gsap.to('#d1', { y:0, opacity:1, duration:.6, ease:'power2.out', scrollTrigger:{ trigger:'#domains', start:'top 78%' } });
+      gsap.to('#d2', { y:0, opacity:1, duration:.6, delay:.10, ease:'power2.out', scrollTrigger:{ trigger:'#domains', start:'top 78%' } });
+      gsap.to('#d3', { y:0, opacity:1, duration:.6, delay:.20, ease:'power2.out', scrollTrigger:{ trigger:'#domains', start:'top 78%' } });
+    });
+  </script>
+</body>
+</html>
