@@ -4,197 +4,228 @@
   <meta charset="UTF-8" />
   <title>MCPilot • Lineage Investigator</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/github.min.css" />
   <link rel="stylesheet" href="styles.css" />
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js" defer></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', () => { if (window.hljs) hljs.highlightAll(); });
-  </script>
   <script src="app.js" defer></script>
 </head>
+
 <body>
-    <!-- ── Investigation Loading Overlay ── -->
-    <div id="investigationOverlay" class="investigation-overlay hidden">
-      <div class="loading-card">
-        <div class="spinner"></div>
-        <h2>Investigating...</h2>
-        <div class="progress-steps">
-          <div class="step active" data-step="0">
-            <div class="step-circle">1</div>
-            <span>Parsing Question</span>
-          </div>
-          <div class="step" data-step="1">
-            <div class="step-circle">2</div>
-            <span>Extracting Entities</span>
-          </div>
-          <div class="step" data-step="2">
-            <div class="step-circle">3</div>
-            <span>Generating Queries</span>
-          </div>
-          <div class="step" data-step="3">
-            <div class="step-circle">4</div>
-            <span>Running Analysis</span>
-          </div>
-          <div class="step" data-step="4">
-            <div class="step-circle">✓</div>
-            <span>Complete</span>
-          </div>
+  <!-- ── Investigation Loading Overlay ── -->
+  <div id="investigationOverlay" class="investigation-overlay hidden">
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <h2>Investigating...</h2>
+      <div class="progress-steps">
+        <div class="step active" data-step="0">
+          <div class="step-circle">1</div>
+          <span>Parsing Question</span>
         </div>
-        <div class="status-message">Step 1 of 4: Parsing your question...</div>
+        <div class="step" data-step="1">
+          <div class="step-circle">2</div>
+          <span>Extracting Entities</span>
+        </div>
+        <div class="step" data-step="2">
+          <div class="step-circle">3</div>
+          <span>Generating Queries</span>
+        </div>
+        <div class="step" data-step="3">
+          <div class="step-circle">4</div>
+          <span>Running Analysis</span>
+        </div>
+        <div class="step" data-step="4">
+          <div class="step-circle">5</div>
+          <span>Complete</span>
+        </div>
+      </div>
+      <div class="status-message">Step 1 of 5: Parsing your question...</div>
+    </div>
+  </div>
+
+  <!-- Toasts Container -->
+  <div id="toasts" class="toasts-container"></div>
+
+  <!-- Tooltip -->
+  <div id="tooltip" class="tooltip hidden"></div>
+
+  <!-- ── Header ── -->
+  <header class="header">
+    <div class="header-content">
+      <div class="logo-section">
+        <div class="logo"></div>
+        <div>
+          <h1 class="title">MCPilot Lineage</h1>
+          <p class="subtitle">Data Lineage &amp; Balance Reconciliation</p>
+        </div>
+      </div>
+      <div class="header-controls">
+        <button id="healthBtn" class="btn btn-secondary" type="button">Health</button>
+        <button id="seedBtn"   class="btn btn-secondary" type="button">Demo Data</button>
       </div>
     </div>
+  </header>
 
-    <!-- Toasts Container -->
-    <div id="toasts" class="toasts-container"></div>
+  <!-- ── Main Layout ── -->
+  <main class="container">
 
-    <!-- Tooltip -->
-    <div id="tooltip" class="tooltip hidden"></div>
+    <!-- ── Sidebar ── -->
+    <aside class="sidebar">
+      <div class="card">
+        <h2 class="card-title">Investigation</h2>
 
-    <!-- ── Header ── -->
-    <header class="header">
-      <div class="header-content">
-        <div class="logo-section">
-          <div class="logo"></div>
-          <div>
-            <h1 class="title">MCPilot Lineage</h1>
-            <p class="subtitle">Data Lineage &amp; Balance Reconciliation</p>
+        <div class="form-group">
+          <label class="label">Ask a Question</label>
+          <textarea id="issueText" class="textarea"
+            placeholder="What would you like to investigate?
+
+Examples:
+• Show balance for account 102
+• Transactions for customer Asha Patel?
+• Why is balance different?
+• List all fee discrepancies"></textarea>
+        </div>
+
+        <div id="quickPrompts" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;">
+          <button class="quick-prompt" type="button" data-index="1" data-prompt="What's the balance discrepancy between raw and mart for Q4?">Q4 Balance Drift</button>
+          <button class="quick-prompt" type="button" data-index="2" data-prompt="What's the balance issue with account 102?">Account 102</button>
+          <button class="quick-prompt" type="button" data-index="3" data-prompt="List all transactions for customer Asha Patel">Customer Asha</button>
+          <button class="quick-prompt" type="button" data-index="4" data-prompt="How many accounts have more than 1% variance?">High Variance</button>
+        </div>
+
+        <button id="runInvestigation" class="btn btn-primary btn-block" type="button">Investigate</button>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Stage Overview</h2>
+        <div id="stageStrip" class="stage-strip"></div>
+      </div>
+    </aside>
+
+    <!-- ── Main Content ── -->
+    <section class="main-content">
+      <div class="card card-full">
+
+        <!-- Tab bar -->
+        <div class="tabs-header">
+          <button class="tab-btn active" type="button" data-tab="investigation">Investigation Results</button>
+          <button class="tab-btn" type="button" data-tab="queries">Queries &amp; Results</button>
+          <button class="tab-btn" type="button" data-tab="detailed">Detailed Analysis</button>
+          <button class="tab-btn" type="button" data-tab="tables">Sample Tables</button>
+        </div>
+
+        <!-- ── Tab 1 ── -->
+        <div id="investigation" class="tab-content active">
+          <div class="results-grid">
+            <div class="results-section">
+              <h3 class="section-title">Summary &amp; Metrics</h3>
+              <div id="summaryMetrics" class="metrics-container"></div>
+            </div>
+
+            <div class="results-section">
+              <h3 class="section-title">Analysis Narrative</h3>
+              <div id="narrative" class="narrative-box"></div>
+            </div>
+
+            <div class="results-section">
+              <h3 class="section-title">Data Lineage Path</h3>
+              <div id="lineagePath" class="lineage-flow"></div>
+            </div>
           </div>
         </div>
-        <div class="header-controls">
-          <button id="healthBtn" class="btn btn-secondary">Health</button>
-          <button id="seedBtn"   class="btn btn-secondary">Demo Data</button>
+
+        <!-- ── Tab 2 ── -->
+        <div id="queries" class="tab-content">
+          <div class="query-results-container">
+            <div class="query-section">
+              <div class="section-header">
+                <h3 class="section-title">Generated Queries</h3>
+                <button id="copyQueries" class="btn btn-sm hidden" type="button">Copy All</button>
+              </div>
+              <div id="queriesContainer" class="queries-list">
+                <p class="placeholder">Run an investigation to see queries</p>
+              </div>
+            </div>
+
+            <div class="results-section-full">
+              <div class="section-header">
+                <h3 class="section-title">Query Results</h3>
+                <button id="copyResults" class="btn btn-sm hidden" type="button">Copy All</button>
+              </div>
+              <div id="resultsContainer" class="results-list">
+                <p class="placeholder">Run an investigation to see results</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Tab 3 ── -->
+        <div id="detailed" class="tab-content">
+          <div class="detailed-section">
+            <div class="section-header">
+              <h3 class="section-title">Detailed Differences</h3>
+              <button id="exportCsv" class="btn btn-sm" type="button">Export CSV</button>
+            </div>
+            <div id="diffTable" class="table-container">
+              <div style="padding:40px;text-align:center;color:var(--text-muted);font-size:14px;">
+                Run an investigation to see row-level diffs
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Tab 4 ── -->
+        <div id="tables" class="tab-content">
+          <div class="sample-tables-container">
+            <div class="section-header">
+              <h3 class="section-title">Database Sample Tables</h3>
+              <button id="refreshPreview" class="btn btn-sm" type="button">Refresh</button>
+            </div>
+            <div id="previewGrid" class="preview-grid-enhanced"></div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <!-- Floating Chatbot -->
+  <div id="chatbot" class="chatbot-widget">
+    <button id="chatbotToggle" class="chatbot-button" title="Help & FAQ" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+      </svg>
+    </button>
+
+    <div id="chatbotPanel" class="chatbot-panel hidden">
+      <div class="chatbot-header">
+        <h3>MCPilot Assistant</h3>
+        <button id="chatbotClose" class="chatbot-close" title="Close" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div id="chatbotContent" class="chatbot-content">
+        <div class="chatbot-message assistant">
+          <p>Hi! 👋 How can I help you understand MCPilot?</p>
+        </div>
+        <div class="faq-buttons">
+          <button class="faq-btn" type="button" data-question="How do I use this tool?">📖 How to use</button>
+          <button class="faq-btn" type="button" data-question="What is SQL and Results?">💾 SQL & Results</button>
+          <button class="faq-btn" type="button" data-question="What is Detailed Analysis?">📊 Detailed Analysis</button>
+          <button class="faq-btn" type="button" data-question="What are Sample Tables?">📋 Sample Tables</button>
+          <button class="faq-btn" type="button" data-question="What is Data Lineage Path?">🔗 Data Lineage</button>
+          <button class="faq-btn" type="button" data-question="How does Investigation work?">🔍 Investigation</button>
         </div>
       </div>
-    </header>
-
-    <!-- ── Main Layout ── -->
-    <main class="container">
-
-      <!-- ── Sidebar ── -->
-      <aside class="sidebar">
-
-        <div class="card">
-          <h2 class="card-title">Investigation</h2>
-
-          <div class="form-group">
-            <label class="label">Ask a Question</label>
-            <textarea id="issueText" class="textarea"
-              placeholder="What would you like to investigate?&#10;&#10;Examples:&#10;• Show balance for account 102&#10;• Transactions for customer Asha Patel?&#10;• Why is balance different?&#10;• List all fee discrepancies"></textarea>
-          </div>
-
-          <div id="quickPrompts" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">
-            <button class="quick-prompt" data-index="1" data-prompt="What's the balance discrepancy between raw and mart for Q4?">Q4 Balance Drift</button>
-            <button class="quick-prompt" data-index="2" data-prompt="Show me all accounts with discrepancies">Accounts with Issues</button>
-            <button class="quick-prompt" data-index="3" data-prompt="What's the balance issue with account 102?">Account 102</button>
-            <button class="quick-prompt" data-index="4" data-prompt="List all transactions for customer Asha Patel">Customer Asha</button>
-            <button class="quick-prompt" data-index="5" data-prompt="How many accounts have more than 1% variance?">High Variance</button>
-          </div>
-
-          <button id="runInvestigation" class="btn btn-primary btn-block">Investigate</button>
-        </div>
-
-        <div class="card">
-          <h2 class="card-title">Stage Overview</h2>
-          <div id="stageStrip" class="stage-strip">
-            <!-- filled by JS -->
-          </div>
-        </div>
-
-      </aside>
-
-      <!-- ── Main Content ── -->
-      <section class="main-content">
-        <div class="card card-full">
-
-          <!-- Tab bar -->
-          <div class="tabs-header">
-            <button class="tab-btn active" data-tab="investigation">Investigation Results</button>
-            <button class="tab-btn" data-tab="queries">Queries &amp; Results</button>
-            <button class="tab-btn" data-tab="detailed">Detailed Analysis</button>
-            <button class="tab-btn" data-tab="tables">Sample Tables</button>
-          </div>
-
-          <!-- ── Tab 1: Investigation Results ── -->
-          <div id="investigation" class="tab-content active">
-            <div class="results-grid">
-
-              <div class="results-section">
-                <h3 class="section-title">Summary &amp; Metrics</h3>
-                <div id="summaryMetrics" class="metrics-container"></div>
-              </div>
-
-              <div class="results-section">
-                <h3 class="section-title">Analysis Narrative</h3>
-                <div id="narrative" class="narrative-box"></div>
-              </div>
-
-              <div class="results-section">
-                <h3 class="section-title">Data Lineage Path</h3>
-                <div id="lineagePath" class="lineage-flow"></div>
-              </div>
-
-            </div>
-          </div>
-
-          <!-- ── Tab 2: Queries & Results ── -->
-          <div id="queries" class="tab-content">
-            <div class="query-results-container">
-
-              <div class="query-section">
-                <div class="section-header">
-                  <h3 class="section-title">Generated Queries</h3>
-                  <button id="copyQueries" class="btn btn-sm hidden">Copy All</button>
-                </div>
-                <div id="queriesContainer" class="queries-list">
-                  <p class="placeholder">Run an investigation to see queries</p>
-                </div>
-              </div>
-
-              <div class="results-section-full">
-                <div class="section-header">
-                  <h3 class="section-title">Query Results</h3>
-                  <button id="copyResults" class="btn btn-sm hidden">Copy All</button>
-                </div>
-                <div id="resultsContainer" class="results-list">
-                  <p class="placeholder">Run an investigation to see results</p>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          <!-- ── Tab 3: Detailed Analysis ── -->
-          <div id="detailed" class="tab-content">
-            <div class="detailed-section">
-              <div class="section-header">
-                <h3 class="section-title">Detailed Differences</h3>
-                <button id="exportCsv" class="btn btn-sm">Export CSV</button>
-              </div>
-              <!-- diffTable itself is the scrollable container (overflow:auto in CSS) -->
-              <div id="diffTable" class="table-container">
-                <div style="padding:40px;text-align:center;color:var(--text-muted);font-size:14px;">
-                  Run an investigation to see row-level diffs
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- ── Tab 4: Sample Tables ── -->
-          <div id="tables" class="tab-content">
-            <div class="sample-tables-container">
-              <div class="section-header">
-                <h3 class="section-title">Database Sample Tables</h3>
-                <button id="refreshPreview" class="btn btn-sm">Refresh</button>
-              </div>
-              <div id="previewGrid" class="preview-grid-enhanced"></div>
-            </div>
-          </div>
-
-        </div>
-      </section>
-    </main>
+    </div>
   </div>
 </body>
 </html>

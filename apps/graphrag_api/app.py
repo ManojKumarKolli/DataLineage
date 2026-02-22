@@ -1,5 +1,5 @@
 # apps/graphrag_api/app.py
-import os, sqlite3
+import os, re, sqlite3
 from fastapi import FastAPI, Query, Body, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -254,6 +254,148 @@ def lineage_ask_question(
     
     # Convert to API parameters
     focus_by, identifier = parser.extract_focus_by_and_id(parsed)
+
+    # Handle aggregate superlative questions (e.g., "which customer has the highest balances?")
+    is_balance_question = (
+        parsed.focus_metric.value == "balance"
+        or bool(re.search(r"\bbalances?\b", question, re.IGNORECASE))
+    )
+    if (
+        identifier == "*"
+        and parsed.investigation_type.value == "customer"
+        and parsed.ranking in {"highest", "lowest"}
+        and is_balance_question
+    ):
+        order = "DESC" if parsed.ranking == "highest" else "ASC"
+        with sqlite3.connect(SQLITE_PATH) as con:
+            cur = con.cursor()
+            cur.execute(
+                f"""
+                SELECT customer_id, full_name, total_balance
+                FROM mart_customer_balances
+                ORDER BY total_balance {order}
+                LIMIT 1
+                """
+            )
+            top = cur.fetchone()
+
+        if not top:
+            raise HTTPException(status_code=404, detail="No customer balances found. Seed demo data first.")
+
+        customer_id, customer_name, customer_balance = top
+        bal = lineage.balances_across_stages(by="customer", key=customer_id)
+        diffs = lineage.diffs(by="customer", key=customer_id)
+
+        totals = bal.get("totals", {}) if bal.get("ok") else {}
+        raw_total = totals.get("raw")
+        stage_total = totals.get("stage")
+        mart_total = totals.get("mart")
+
+        def _delta(a, b):
+            if a is None or b is None:
+                return None, None
+            d = b - a
+            pct = (d / a) if abs(a) > 1e-9 else None
+            return d, pct
+
+        d_stage, pct_stage = _delta(raw_total, stage_total)
+        d_mart, pct_mart = _delta(stage_total if stage_total is not None else raw_total, mart_total)
+
+        diff_rows = diffs.get("rows", []) if diffs.get("ok") else []
+        discrepant_accounts = sum(1 for row in diff_rows if len(row) >= 4 and abs((row[3] or 0.0)) > 0.01)
+        max_variance_percent = None
+        for row in diff_rows:
+            if len(row) < 4:
+                continue
+            base = row[1] or 0.0
+            if abs(base) <= 1e-9:
+                continue
+            pct = abs((row[3] or 0.0) / base)
+            max_variance_percent = pct if max_variance_percent is None else max(max_variance_percent, pct)
+
+        direction = "highest" if parsed.ranking == "highest" else "lowest"
+        narrative = (
+            f"Customer {customer_name} (ID {customer_id}) has the {direction} total balance at "
+            f"${customer_balance:,.2f} in mart.customer_balances."
+        )
+
+        return {
+            "narrative": narrative,
+            "metrics": {
+                "raw_balance": raw_total,
+                "mart_balance": mart_total,
+                "gross_drift": (mart_total - raw_total) if raw_total is not None and mart_total is not None else None,
+                "discrepant_accounts": discrepant_accounts,
+                "max_variance_percent": max_variance_percent,
+                "total_transactions": None,
+                "window": "full"
+            },
+            "path": [
+                {
+                    "label": "Raw accounts (per-account balances)",
+                    "stage": "raw",
+                    "balance": raw_total,
+                    "txn_count": None,
+                    "delta_balance": None,
+                    "delta_percent": None,
+                },
+                {
+                    "label": "Staging accounts (cleansed balances)",
+                    "stage": "stage",
+                    "balance": stage_total,
+                    "txn_count": None,
+                    "delta_balance": d_stage,
+                    "delta_percent": pct_stage,
+                },
+                {
+                    "label": "Customer mart balance (sum of accounts)",
+                    "stage": "mart",
+                    "balance": mart_total,
+                    "txn_count": None,
+                    "delta_balance": d_mart,
+                    "delta_percent": pct_mart,
+                }
+            ],
+            "diffs": [
+                {
+                    "account_id": row[0],
+                    "raw_balance": row[1],
+                    "stage_balance": row[2],
+                    "delta": row[3],
+                }
+                for row in diff_rows
+            ],
+            "queries": [
+                {
+                    "type": "SQL",
+                    "query": (
+                        "SELECT customer_id, full_name, total_balance "
+                        "FROM mart_customer_balances "
+                        f"ORDER BY total_balance {order} LIMIT 1;"
+                    )
+                },
+                {
+                    "type": "SQL",
+                    "query": (
+                        "SELECT account_id, COALESCE(r.balance,0) AS raw_balance, "
+                        "COALESCE(s.balance,0) AS stage_balance, "
+                        "(COALESCE(s.balance,0) - COALESCE(r.balance,0)) AS delta "
+                        f"FROM (SELECT account_id FROM stage_accounts WHERE customer_id={customer_id} "
+                        f"UNION SELECT account_id FROM raw_accounts WHERE customer_id={customer_id}) a "
+                        "LEFT JOIN raw_accounts r ON r.account_id = a.account_id "
+                        "LEFT JOIN stage_accounts s ON s.account_id = a.account_id "
+                        "ORDER BY ABS(delta) DESC, a.account_id;"
+                    )
+                }
+            ],
+            "results": [
+                {
+                    "name": f"Customer with {direction} total balance",
+                    "columns": ["customer_id", "full_name", "total_balance"],
+                    "rows": [[customer_id, customer_name, customer_balance]],
+                }
+            ]
+        }
     
     # Handle aggregate/general questions (no specific identifier)
     if identifier == "*":
@@ -721,4 +863,3 @@ def lineage_summary():
     Stage-level summary used by the UI for the Stage Overview cards.
     """
     return lineage.stage_summary()
-

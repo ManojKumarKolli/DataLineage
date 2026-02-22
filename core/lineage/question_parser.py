@@ -47,6 +47,7 @@ class ParsedQuestion:
     confidence: float               # 0.0-1.0 parsing confidence
     suggested_query: str            # Human-readable query summary
     raw_intent: str                # Parsed intent in structured form
+    ranking: Optional[str] = None  # "highest" | "lowest" when superlative intent is detected
 
 
 class QuestionParser:
@@ -62,7 +63,7 @@ class QuestionParser:
     }
     
     METRIC_SYNONYMS = {
-        'balance': ['balance', 'cash', 'funds', 'available balance', 'account balance', 'total balance'],
+        'balance': ['balance', 'balances', 'cash', 'funds', 'available balance', 'available balances', 'account balance', 'account balances', 'total balance', 'total balances'],
         'transactions': ['transaction', 'txn', 'transfer', 'activity', 'history', 'movement'],
         'inflows': ['inflow', 'deposit', 'income', 'incoming', 'deposit', 'received'],
         'outflows': ['outflow', 'withdrawal', 'expense', 'outgoing', 'spent', 'paid'],
@@ -116,10 +117,13 @@ class QuestionParser:
             confidence = min(1.0, confidence + 0.1)
         
         # 5. Build suggested query
-        suggested_query = self._build_suggested_query(inv_type, metric, identifiers, date_range)
+        ranking = self._detect_ranking(question_lower)
+        suggested_query = self._build_suggested_query(inv_type, metric, identifiers, date_range, ranking)
         
         # 6. Create raw intent string
         raw_intent = f"{inv_type.value}:{metric.value}"
+        if ranking:
+            raw_intent += f":{ranking}"
         if identifiers:
             raw_intent += f":{','.join(identifiers)}"
         
@@ -131,8 +135,17 @@ class QuestionParser:
             date_range=date_range,
             confidence=min(1.0, confidence),
             suggested_query=suggested_query,
-            raw_intent=raw_intent
+            raw_intent=raw_intent,
+            ranking=ranking,
         )
+
+    def _detect_ranking(self, question: str) -> Optional[str]:
+        """Detect superlative/ranking intent from NL question."""
+        if re.search(r'\b(highest|top|largest|max(?:imum)?)\b', question, re.IGNORECASE):
+            return "highest"
+        if re.search(r'\b(lowest|bottom|smallest|min(?:imum)?)\b', question, re.IGNORECASE):
+            return "lowest"
+        return None
     
     def _detect_investigation_type(self, question: str) -> tuple[InvestigationType, float]:
         """Detect which entity the question is about"""
@@ -233,13 +246,18 @@ class QuestionParser:
         
         return None
     
-    def _build_suggested_query(self, inv_type: InvestigationType, metric: FocusMetric, 
-                               identifiers: List[str], date_range: Optional[tuple]) -> str:
+    def _build_suggested_query(self, inv_type: InvestigationType, metric: FocusMetric,
+                               identifiers: List[str], date_range: Optional[tuple],
+                               ranking: Optional[str]) -> str:
         """Build human-readable query summary"""
         parts = []
         
         # Query intent
-        if metric == FocusMetric.ALL:
+        if ranking and metric != FocusMetric.ALL:
+            parts.append(f"Find {ranking} {metric.value} for {inv_type.value}")
+        elif ranking and metric == FocusMetric.ALL:
+            parts.append(f"Find {ranking} values for {inv_type.value}")
+        elif metric == FocusMetric.ALL:
             parts.append(f"Investigate all metrics for {inv_type.value}")
         else:
             parts.append(f"Check {metric.value} for {inv_type.value}")
