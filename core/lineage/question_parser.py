@@ -107,7 +107,7 @@ class QuestionParser:
         confidence = (confidence + metric_conf) / 2
         
         # 3. Extract identifiers (account IDs, customer names, etc.)
-        identifiers = self._extract_identifiers(question_lower)
+        identifiers = self._extract_identifiers(question)
         if identifiers:
             confidence = min(1.0, confidence + 0.15)
         
@@ -209,8 +209,19 @@ class QuestionParser:
         identifiers.extend(account_ids)
         
         # Pattern 2: Customer IDs/names
-        customer_matches = re.findall(r'\bcustomer\s+(?:id\s+)?([A-Za-z0-9\s]+?)(?:\.|,|\s+(?:has|with|for|on)|\s*$)', question, re.IGNORECASE)
-        identifiers.extend([m.strip() for m in customer_matches if m.strip()])
+        customer_matches = re.findall(r'\bcustomer\s+(?:id\s+)?([A-Za-z0-9\s]+?)(?:\.|,|\s+(?:has|with|for|on)\b|\s*$)', question, re.IGNORECASE)
+        blocked_tokens = {
+            "raw", "stage", "staging", "mart", "balance", "total", "deltas", "delta",
+            "derived", "derive", "variance", "discrepancy", "issue", "issues", "expla", "explain"
+        }
+        for match in customer_matches:
+            val = (match or "").strip()
+            if not val:
+                continue
+            words = set(re.findall(r"[a-zA-Z]+", val.lower()))
+            if words & blocked_tokens:
+                continue
+            identifiers.append(val)
         
         # Pattern 3: Transaction IDs
         txn_ids = re.findall(r'\btxn\s+(?:id\s+)?(\d+)\b', question, re.IGNORECASE)
@@ -224,7 +235,16 @@ class QuestionParser:
         name_context = re.findall(r'(?:for|of|belongs to)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)', question)
         identifiers.extend(name_context)
         
-        return list(set(identifiers))  # Remove duplicates
+        # De-duplicate while preserving order (critical for deterministic routing)
+        deduped = []
+        seen = set()
+        for item in identifiers:
+            key = item.strip().lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            deduped.append(item.strip())
+        return deduped
     
     def _extract_date_range(self, question: str) -> Optional[tuple]:
         """Extract date range if present (returns (start, end) or None)"""
@@ -288,9 +308,23 @@ class QuestionParser:
         else:
             focus_by = parsed.investigation_type.value
         
-        # Use first identifier, or use wildcard for aggregate questions
+        # Route account-vs-customer based on available identifier shape
         if parsed.identifiers:
-            identifier = parsed.identifiers[0]
+            numeric_ids = [i for i in parsed.identifiers if str(i).isdigit()]
+            text_ids = [i for i in parsed.identifiers if not str(i).isdigit()]
+
+            if focus_by == "account" and numeric_ids:
+                identifier = numeric_ids[0]
+            elif focus_by == "account" and text_ids and re.search(r"\bcustomer\b", parsed.original_question, re.IGNORECASE):
+                # Questions like "account-level deltas for customer Asha Patel"
+                focus_by = "customer"
+                identifier = text_ids[0]
+            elif focus_by == "customer" and text_ids:
+                identifier = text_ids[0]
+            elif numeric_ids:
+                identifier = numeric_ids[0]
+            else:
+                identifier = parsed.identifiers[0]
         else:
             # For general/aggregate questions, use wildcard
             # This allows querying summary statistics without a specific account

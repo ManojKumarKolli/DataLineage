@@ -428,35 +428,40 @@ body {
 
 /* ═══════════════════════════════ QUICK PROMPTS ═══════════════════════════════ */
 
+.quick-prompts {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
 .quick-prompt {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
   background: linear-gradient(135deg, rgba(0,102,204,0.08) 0%, rgba(0,217,255,0.04) 100%);
   color: var(--primary);
   border: 1.5px solid var(--primary-light);
   border-radius: 14px;
-  padding: 12px 18px;
+  padding: 9px 12px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
-  white-space: nowrap;
+  white-space: normal;
+  text-align: left;
   position: relative;
   overflow: hidden;
   letter-spacing: 0.3px;
-  text-transform: uppercase;
+  text-transform: none;
   box-shadow: 0 2px 8px rgba(0,102,204,0.1), inset 0 1px 0 rgba(255,255,255,0.5);
   animation: promptSlideIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
-  min-height: 40px;
+  animation-delay: calc((var(--i, 1) - 1) * 0.08s);
+  min-height: 36px;
   width: 100%;
+  line-height: 1.35;
 }
-
-.quick-prompt:nth-child(1) { animation-delay: 0.05s; }
-.quick-prompt:nth-child(2) { animation-delay: 0.15s; }
-.quick-prompt:nth-child(3) { animation-delay: 0.25s; }
-.quick-prompt:nth-child(4) { animation-delay: 0.35s; }
 
 @keyframes promptSlideIn {
   from {
@@ -2015,6 +2020,46 @@ tr:last-child td { border-bottom: none; }
   grid-template-columns: 1fr;
   gap: 8px;
   padding: 12px 0;
+}
+
+.chatbot-section {
+  border: 1px solid rgba(0,102,204,0.12);
+  background: rgba(0,102,204,0.03);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.chatbot-section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--primary);
+  margin: 0 0 8px;
+}
+
+.chatbot-prompt-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.chatbot-prompt-btn {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(0,102,204,0.2);
+  background: #ffffff;
+  color: var(--primary-dark);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chatbot-prompt-btn:hover {
+  border-color: rgba(0,102,204,0.38);
+  background: rgba(0,102,204,0.06);
+  transform: translateX(2px);
 }
 
 .faq-btn {

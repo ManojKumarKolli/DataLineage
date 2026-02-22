@@ -595,12 +595,12 @@ exportCsvBtn?.addEventListener('click', ()=>{
 
 /* ---------------- Chatbot ---------------- */
 const chatbotFAQs = {
-  'How do I use this tool?': 'MCPilot helps you investigate data discrepancies and lineage issues. Write your question and click "Investigate". You’ll see the diffs, SQL queries, and lineage path.',
-  'What is SQL and Results?': 'Shows the SQL queries executed and the returned result sets so you can validate how the discrepancy was computed.',
-  'What is Detailed Analysis?': 'Row-level diffs (accounts/transactions) that drive the drift, including variance percentages.',
-  'What are Sample Tables?': 'A preview of raw/stage/mart tables (sample rows) to quickly inspect shapes and values.',
-  'What is Data Lineage Path?': 'A visual path of the entity through raw → stage → mart to spot where the drift appears.',
-  'How does Investigation work?': 'It parses your question, extracts entities, generates queries, executes them, and summarizes the drift + diffs.'
+  'How do I use this tool?': 'Start with one Demo Starter. Click Investigate, then walk through Summary, Narrative, Lineage Path, and finally SQL/Results to prove traceability.',
+  'What is SQL and Results?': 'This tab shows the exact SQL used for the answer and the returned rows, so clients can audit every claim.',
+  'What is Detailed Analysis?': 'Detailed Analysis lists row-level raw vs stage deltas and highlights which accounts create the customer-level drift.',
+  'What are Sample Tables?': 'Sample Tables previews raw, stage, and mart schemas plus data slices, helpful for explaining transformation flow.',
+  'What is Data Lineage Path?': 'Lineage Path visualizes how values move from raw ingestion to staging cleanup to mart aggregation.',
+  'How does Investigation work?': 'The system parses your question, picks focus entity + metric, runs reconciliation queries, and generates an evidence-backed narrative.'
 };
 
 function initChatbot(){
@@ -635,6 +635,31 @@ function initChatbot(){
       const assistantMsg = document.createElement('div');
       assistantMsg.className = 'chatbot-message assistant';
       assistantMsg.innerHTML = `<p>${escapeHtml(answer)}</p>`;
+      content.appendChild(assistantMsg);
+
+      content.scrollTop = content.scrollHeight;
+    });
+  });
+
+  qsa('.chatbot-prompt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const prompt = btn.dataset.prompt;
+      if (!prompt || !issueText) return;
+
+      issueText.value = prompt;
+      issueText.focus();
+      toast('Question added. Click Investigate to run.', 'ok');
+
+      if (!content) return;
+
+      const userMsg = document.createElement('div');
+      userMsg.className = 'chatbot-message user';
+      userMsg.innerHTML = `<p>${escapeHtml(`Use this question: ${prompt}`)}</p>`;
+      content.appendChild(userMsg);
+
+      const assistantMsg = document.createElement('div');
+      assistantMsg.className = 'chatbot-message assistant';
+      assistantMsg.innerHTML = '<p>Loaded into the investigation box. Run it and then open SQL & Results for explainability.</p>';
       content.appendChild(assistantMsg);
 
       content.scrollTop = content.scrollHeight;
