@@ -4,9 +4,14 @@ const qsa = (s, el=document)=>Array.from(el.querySelectorAll(s));
 const issueText       = qs('#issueText');
 const runBtn          = qs('#runInvestigation');
 const healthBtn       = qs('#healthBtn');
+const serverStatusPill= qs('#serverStatusPill');
 const stageStrip      = qs('#stageStrip');
 const previewGrid     = qs('#previewGrid');
 const refreshPreview  = qs('#refreshPreview');
+const metadataTableSelect = qs('#metadataTableSelect');
+const metadataSummary = qs('#metadataSummary');
+const metadataColumns = qs('#metadataColumns');
+const metadataSample  = qs('#metadataSample');
 const summaryMetrics  = qs('#summaryMetrics');
 const narrativeEl     = qs('#narrative');
 const lineagePathEl   = qs('#lineagePath');
@@ -18,6 +23,8 @@ const queriesContainer= qs('#queriesContainer');
 const resultsContainer= qs('#resultsContainer');
 const copyQueriesBtn  = qs('#copyQueries');
 const copyResultsBtn  = qs('#copyResults');
+
+let cachedPreviewTables = [];
 
 /* ---------------- Tabs ---------------- */
 function initTabs(){
@@ -63,13 +70,28 @@ document.addEventListener('mouseout', e=>{
 });
 
 /* ---------------- Investigation Overlay ---------------- */
+let overlayStepTimers = [];
+let overlayPulseTimer = null;
+
+function clearOverlayTimers(){
+  overlayStepTimers.forEach(id => clearTimeout(id));
+  overlayStepTimers = [];
+  if (overlayPulseTimer) {
+    clearInterval(overlayPulseTimer);
+    overlayPulseTimer = null;
+  }
+}
+
 function showLoadingOverlay(){
   const overlay = qs('#investigationOverlay');
   if (!overlay) return;
 
+  clearOverlayTimers();
+
   overlay.classList.remove('hidden');
   const steps = qsa('.step', overlay);
   const statusMsg = qs('.status-message', overlay);
+  const startTs = Date.now();
 
   steps.forEach(step => {
     step.classList.remove('active', 'completed');
@@ -83,47 +105,44 @@ function showLoadingOverlay(){
     if (statusMsg) statusMsg.textContent = 'Step 1 of 5: Parsing your question...';
   }
 
-  const stepMessages = [
-    'Step 1 of 5: Parsing your question...',
-    'Step 2 of 5: Extracting entities...',
-    'Step 3 of 5: Generating queries...',
-    'Step 4 of 5: Running analysis...',
-    'Step 5 of 5: Complete!'
-  ];
-  const delays = [800, 1600, 2400, 3200, 4000];
-
-  steps.forEach((step, idx) => {
-    setTimeout(() => {
-      if (idx > 0) {
-        steps[idx - 1].classList.remove('active');
-        steps[idx - 1].classList.add('completed');
-        const prevCircle = qs('.step-circle', steps[idx - 1]);
-        if (prevCircle) prevCircle.textContent = '✓';
+  const activateStep = (idx, msg) => {
+    steps.forEach((step, i) => {
+      step.classList.remove('active');
+      if (i < idx) {
+        step.classList.add('completed');
+        const circle = qs('.step-circle', step);
+        if (circle) circle.textContent = '✓';
       }
-      step.classList.add('active');
-      if (statusMsg) statusMsg.textContent = stepMessages[idx];
-    }, delays[idx]);
-  });
+    });
+    const step = steps[idx];
+    if (step) step.classList.add('active');
+    if (statusMsg) statusMsg.textContent = msg;
+  };
 
-  setTimeout(() => {
-    if (steps[4]) {
-      steps[4].classList.remove('active');
-      steps[4].classList.add('completed');
-      const lastCircle = qs('.step-circle', steps[4]);
-      if (lastCircle) lastCircle.textContent = '✓';
-      if (statusMsg) statusMsg.textContent = 'Investigation complete!';
-    }
-  }, 4800);
+  // Move through pre-analysis phases quickly, then stay in running state until actual response arrives.
+  activateStep(0, 'Step 1 of 5: Parsing your question...');
+  overlayStepTimers.push(setTimeout(() => activateStep(1, 'Step 2 of 5: Extracting entities...'), 500));
+  overlayStepTimers.push(setTimeout(() => activateStep(2, 'Step 3 of 5: Generating queries...'), 1200));
+  overlayStepTimers.push(setTimeout(() => activateStep(3, 'Step 4 of 5: Running analysis...'), 2100));
+
+  overlayPulseTimer = setInterval(() => {
+    if (!statusMsg) return;
+    const elapsed = ((Date.now() - startTs) / 1000).toFixed(1);
+    statusMsg.textContent = `Step 4 of 5: Running analysis... (${elapsed}s)`;
+  }, 1000);
 }
 
 function hideLoadingOverlay(){
   const overlay = qs('#investigationOverlay');
+  clearOverlayTimers();
   if (overlay) overlay.classList.add('hidden');
 }
 
 function completeLoadingOverlay(){
   const overlay = qs('#investigationOverlay');
   if (!overlay) return;
+
+  clearOverlayTimers();
 
   const steps = qsa('.step', overlay);
   const statusMsg = qs('.status-message', overlay);
@@ -151,12 +170,34 @@ async function getJSON(url){
 async function health(){
   try{
     const j = await getJSON('/lineage-api/health');
+    setServerStatus(true, 'Connected');
     toast(`Lineage API OK${j.db ? ' • DB: '+j.db : ''}`, 'ok');
   }catch{
+    setServerStatus(false, 'Disconnected');
     toast('Lineage API health failed', 'err');
   }
 }
 healthBtn?.addEventListener('click', health);
+
+function setServerStatus(isUp, label){
+  if (!serverStatusPill) return;
+  serverStatusPill.classList.remove('ok', 'err', 'unknown');
+  serverStatusPill.classList.add(isUp ? 'ok' : 'err');
+  const txt = qs('.server-text', serverStatusPill);
+  if (txt) txt.textContent = label;
+}
+
+async function pingServerHealth(silent = true){
+  try{
+    const j = await getJSON('/lineage-api/health');
+    setServerStatus(true, 'Connected');
+    return j;
+  }catch(e){
+    setServerStatus(false, 'Disconnected');
+    if (!silent) toast('Lineage API health failed', 'err');
+    return null;
+  }
+}
 
 /* ---------------- Seed Demo ---------------- */
 seedBtn?.addEventListener('click', async ()=>{
@@ -228,12 +269,16 @@ async function loadPreview(){
   try{
     const j = await getJSON('/lineage-api/preview?limit=5');
     const tables = j.tables || j || [];
+    cachedPreviewTables = tables;
+    renderMetadataPicker(tables);
+
     if (!tables.length){
       previewGrid.innerHTML = `
         <div class="preview-card">
           <small>No tables yet. Click <strong>"Demo Data"</strong> to load sample lineage data.</small>
         </div>
       `;
+      clearMetadataPanel('No tables available. Seed demo data to inspect metadata.');
       return;
     }
 
@@ -259,10 +304,119 @@ async function loadPreview(){
     }).join('');
 
   }catch{
+    cachedPreviewTables = [];
+    renderMetadataPicker([]);
+    clearMetadataPanel('Failed to load metadata. Check API connection.');
     previewGrid.innerHTML = '<div class="preview-card"><small style="color:var(--danger)">Failed to load sample tables.</small></div>';
   }
 }
 refreshPreview?.addEventListener('click', loadPreview);
+
+function clearMetadataPanel(msg){
+  if (metadataSummary) {
+    metadataSummary.innerHTML = `
+      <div class="meta-card"><span>Stage</span><strong>—</strong></div>
+      <div class="meta-card"><span>Columns</span><strong>—</strong></div>
+      <div class="meta-card"><span>Rows</span><strong>—</strong></div>
+      <div class="meta-card"><span>Sample Size</span><strong>—</strong></div>
+    `;
+  }
+  if (metadataColumns) metadataColumns.innerHTML = `<p class="placeholder">${escapeHtml(msg || 'Select a table to view schema attributes.')}</p>`;
+  if (metadataSample) metadataSample.innerHTML = `<p class="placeholder">${escapeHtml(msg || 'Select a table to preview records.')}</p>`;
+}
+
+function renderMetadataPicker(tables){
+  if (!metadataTableSelect) return;
+  const options = ['<option value="">Choose a table...</option>'];
+  let firstName = null;
+
+  (tables || []).forEach(t => {
+    const name = t.name || t.table;
+    if (!name) return;
+    if (!firstName) firstName = String(name);
+    options.push(`<option value="${encodeURIComponent(String(name))}">${escapeHtml(name)} (${escapeHtml(t.stage || 'main')})</option>`);
+  });
+
+  metadataTableSelect.innerHTML = options.join('');
+  if (firstName) {
+    metadataTableSelect.value = encodeURIComponent(firstName);
+    renderMetadataForTable(firstName);
+  } else {
+    clearMetadataPanel('No tables available. Seed demo data to inspect metadata.');
+  }
+}
+
+function renderMetadataForTable(tableName){
+  if (!tableName){
+    clearMetadataPanel();
+    return;
+  }
+
+  const t = cachedPreviewTables.find(x => (x.name || x.table) === tableName);
+  if (!t){
+    clearMetadataPanel('Selected table not found in current preview payload.');
+    return;
+  }
+
+  const cols = t.columns || [];
+  const rows = t.rows || [];
+  const colMeta = Array.isArray(t.column_meta) && t.column_meta.length
+    ? t.column_meta
+    : cols.map(c => ({ name: c, dtype: 'UNKNOWN', notnull: false, default: null, pk: false }));
+
+  if (metadataSummary) {
+    metadataSummary.innerHTML = `
+      <div class="meta-card"><span>Stage</span><strong>${escapeHtml(t.stage || 'main')}</strong></div>
+      <div class="meta-card"><span>Columns</span><strong>${colMeta.length}</strong></div>
+      <div class="meta-card"><span>Rows</span><strong>${(t.row_count ?? '—')}</strong></div>
+      <div class="meta-card"><span>Sample Size</span><strong>${rows.length}</strong></div>
+    `;
+  }
+
+  if (metadataColumns) {
+    const body = colMeta.map(c => `
+      <tr>
+        <td>${escapeHtml(c.name)}</td>
+        <td>${escapeHtml(c.dtype || 'TEXT')}</td>
+        <td>${c.notnull ? 'YES' : 'NO'}</td>
+        <td>${c.pk ? 'YES' : 'NO'}</td>
+        <td>${escapeHtml(c.default ?? 'NULL')}</td>
+      </tr>
+    `).join('');
+
+    metadataColumns.innerHTML = `
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th>Column</th><th>Type</th><th>Not Null</th><th>Primary Key</th><th>Default</th></tr>
+          </thead>
+          <tbody>${body || '<tr><td colspan="5"><em>No columns</em></td></tr>'}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  if (metadataSample) {
+    const head = cols.map(c => `<th>${escapeHtml(c)}</th>`).join('');
+    const body = rows.length
+      ? rows.map(r => `<tr>${r.map(v => `<td>${escapeHtml(v)}</td>`).join('')}</tr>`).join('')
+      : `<tr><td colspan="${Math.max(cols.length,1)}"><em>No sample rows</em></td></tr>`;
+
+    metadataSample.innerHTML = `
+      <div class="tablewrap">
+        <table>
+          <thead><tr>${head || '<th>Value</th>'}</tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    `;
+  }
+}
+
+metadataTableSelect?.addEventListener('change', (e) => {
+  const selected = decodeURIComponent(e.target.value || '');
+  renderMetadataForTable(selected);
+});
 
 /* ---------------- Quick Prompts ---------------- */
 qsa('.quick-prompt').forEach(btn => {
@@ -687,9 +841,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   initChatbot();
 
   try{
-    await Promise.all([loadSummary(), loadPreview()]);
+    await Promise.all([pingServerHealth(true), loadSummary(), loadPreview()]);
     toast('MCPilot Lineage ready', 'ok');
   }catch{
+    setServerStatus(false, 'Disconnected');
     toast('Loaded UI, but failed initial data fetch.', 'warn');
   }
+
+  setInterval(() => {
+    pingServerHealth(true);
+  }, 10000);
 });

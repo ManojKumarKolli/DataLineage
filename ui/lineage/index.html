@@ -64,8 +64,12 @@
         </div>
       </div>
       <div class="header-controls">
-        <button id="healthBtn" class="btn btn-secondary" type="button">Health</button>
-        <button id="seedBtn"   class="btn btn-secondary" type="button">Demo Data</button>
+        <div id="serverStatusPill" class="server-status unknown" title="Server connection status">
+          <span class="server-dot"></span>
+          <span class="server-text">Checking...</span>
+        </div>
+        <button id="healthBtn" class="btn btn-secondary header-btn" type="button">Health</button>
+        <button id="seedBtn"   class="btn btn-secondary header-btn demo-btn" type="button">Demo Data</button>
       </div>
     </div>
   </header>
@@ -118,6 +122,7 @@ Examples:
           <button class="tab-btn" type="button" data-tab="queries">Queries &amp; Results</button>
           <button class="tab-btn" type="button" data-tab="detailed">Detailed Analysis</button>
           <button class="tab-btn" type="button" data-tab="tables">Sample Tables</button>
+          <button class="tab-btn" type="button" data-tab="metadata">Table Metadata</button>
         </div>
 
         <!-- ── Tab 1 ── -->
@@ -188,6 +193,41 @@ Examples:
               <button id="refreshPreview" class="btn btn-sm" type="button">Refresh</button>
             </div>
             <div id="previewGrid" class="preview-grid-enhanced"></div>
+          </div>
+        </div>
+
+        <!-- ── Tab 5 ── -->
+        <div id="metadata" class="tab-content">
+          <div class="metadata-layout">
+            <div class="metadata-toolbar">
+              <label class="label" for="metadataTableSelect">Select Table</label>
+              <select id="metadataTableSelect" class="select">
+                <option value="">Choose a table...</option>
+              </select>
+            </div>
+
+            <div id="metadataSummary" class="meta-summary">
+              <div class="meta-card"><span>Stage</span><strong>—</strong></div>
+              <div class="meta-card"><span>Columns</span><strong>—</strong></div>
+              <div class="meta-card"><span>Rows</span><strong>—</strong></div>
+              <div class="meta-card"><span>Sample Size</span><strong>—</strong></div>
+            </div>
+
+            <div class="meta-grid">
+              <div class="results-section">
+                <h3 class="section-title">Column Attributes</h3>
+                <div id="metadataColumns" class="meta-tablewrap">
+                  <p class="placeholder">Select a table to view schema attributes.</p>
+                </div>
+              </div>
+
+              <div class="results-section">
+                <h3 class="section-title">Sample Rows</h3>
+                <div id="metadataSample" class="meta-tablewrap">
+                  <p class="placeholder">Select a table to preview records.</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

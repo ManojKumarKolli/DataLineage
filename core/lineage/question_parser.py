@@ -141,9 +141,9 @@ class QuestionParser:
 
     def _detect_ranking(self, question: str) -> Optional[str]:
         """Detect superlative/ranking intent from NL question."""
-        if re.search(r'\b(highest|top|largest|max(?:imum)?)\b', question, re.IGNORECASE):
+        if re.search(r'\b(highest|top|largest|max(?:imum)?|most)\b', question, re.IGNORECASE):
             return "highest"
-        if re.search(r'\b(lowest|bottom|smallest|min(?:imum)?)\b', question, re.IGNORECASE):
+        if re.search(r'\b(lowest|bottom|smallest|min(?:imum)?|least)\b', question, re.IGNORECASE):
             return "lowest"
         return None
     
@@ -203,6 +203,14 @@ class QuestionParser:
     def _extract_identifiers(self, question: str) -> List[str]:
         """Extract account IDs, customer names, transaction IDs, etc."""
         identifiers = []
+
+        # Pattern 0: Explicit customer IDs in flexible phrasing
+        customer_ids = re.findall(
+            r'\bcustomer(?:\s+\w+){0,4}?\s+id(?:\s*(?:is|=|with|:))?\s*(\d+)\b',
+            question,
+            re.IGNORECASE,
+        )
+        identifiers.extend(customer_ids)
         
         # Pattern 1: Account IDs (numbers)
         account_ids = re.findall(r'\baccount\s+(?:id\s+)?(\d+)\b', question, re.IGNORECASE)
@@ -212,7 +220,8 @@ class QuestionParser:
         customer_matches = re.findall(r'\bcustomer\s+(?:id\s+)?([A-Za-z0-9\s]+?)(?:\.|,|\s+(?:has|with|for|on)\b|\s*$)', question, re.IGNORECASE)
         blocked_tokens = {
             "raw", "stage", "staging", "mart", "balance", "total", "deltas", "delta",
-            "derived", "derive", "variance", "discrepancy", "issue", "issues", "expla", "explain"
+            "derived", "derive", "variance", "discrepancy", "issue", "issues", "expla", "explain",
+            "who", "whose", "has", "with", "id", "number", "no"
         }
         for match in customer_matches:
             val = (match or "").strip()
@@ -319,6 +328,8 @@ class QuestionParser:
                 # Questions like "account-level deltas for customer Asha Patel"
                 focus_by = "customer"
                 identifier = text_ids[0]
+            elif focus_by == "customer" and numeric_ids and re.search(r"\bcustomer\b.*\bid\b", parsed.original_question, re.IGNORECASE):
+                identifier = numeric_ids[0]
             elif focus_by == "customer" and text_ids:
                 identifier = text_ids[0]
             elif numeric_ids:

@@ -663,13 +663,28 @@ class LineageService:
             cur.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
             for (t,) in cur.fetchall():
                 cur.execute(f"PRAGMA table_info({t});")
-                cols = [r[1] for r in cur.fetchall()]
+                info = cur.fetchall()
+                cols = [r[1] for r in info]
+                col_meta = [
+                    {
+                        "name": r[1],
+                        "dtype": r[2],
+                        "notnull": bool(r[3]),
+                        "default": r[4],
+                        "pk": bool(r[5]),
+                    }
+                    for r in info
+                ]
+                cur.execute(f"SELECT COUNT(*) FROM {t}")
+                row_count = cur.fetchone()[0]
                 cur.execute(f"SELECT * FROM {t} LIMIT {limit}")
                 rows = cur.fetchall()
                 tables.append({
                     "name": t,
                     "stage": "lineage",
                     "columns": cols,
+                    "column_meta": col_meta,
+                    "row_count": row_count,
                     "rows": rows,
                 })
 
@@ -694,16 +709,31 @@ class LineageService:
             for t in keep:
                 try:
                     cur.execute(f"PRAGMA table_info({t});")
-                    cols = [r[1] for r in cur.fetchall()]
+                    info = cur.fetchall()
+                    cols = [r[1] for r in info]
+                    col_meta = [
+                        {
+                            "name": r[1],
+                            "dtype": r[2],
+                            "notnull": bool(r[3]),
+                            "default": r[4],
+                            "pk": bool(r[5]),
+                        }
+                        for r in info
+                    ]
                     if not cols:
                         # table doesn't exist yet, skip quietly
                         continue
+                    cur.execute(f"SELECT COUNT(*) FROM {t}")
+                    row_count = cur.fetchone()[0]
                     cur.execute(f"SELECT * FROM {t} LIMIT {limit}")
                     rows = cur.fetchall()
                     tables.append({
                         "name": t,
                         "stage": _infer_stage(t),
                         "columns": cols,
+                        "column_meta": col_meta,
+                        "row_count": row_count,
                         "rows": rows,
                     })
                 except sqlite3.Error:

@@ -251,6 +251,46 @@ def lineage_ask_question(
     # Parse the natural language question
     parser = QuestionParser()
     parsed = parser.parse(question)
+
+    # Transaction/history questions are better served via SQL generation than lineage reconcile.
+    is_transaction_question = (
+        parsed.focus_metric.value == "transactions"
+        or bool(re.search(r"\b(transactions?|txn|activity|history|recent)\b", question, re.IGNORECASE))
+    )
+    if is_transaction_question:
+        try:
+            sql_res = sql.answer(question)
+            rows = sql_res.get("rows", [])
+            cols = sql_res.get("columns", [])
+            query_text = sql_res.get("sql", "")
+            summary_text = nlg.summarize(
+                question,
+                cols,
+                rows,
+                flavor="SQL",
+                source=sql_res.get("source"),
+            ) if rows else "No transactions found for this question."
+
+            return {
+                "narrative": summary_text,
+                "metrics": {
+                    "rows_returned": len(rows),
+                    "question_type": "transactions",
+                },
+                "path": [],
+                "diffs": [],
+                "queries": [{"type": "SQL", "query": query_text}] if query_text else [],
+                "results": [
+                    {
+                        "name": "Transaction query result",
+                        "columns": cols,
+                        "rows": rows,
+                    }
+                ],
+            }
+        except Exception:
+            # Fall through to lineage handlers if SQL generation/execution fails.
+            pass
     
     # Convert to API parameters
     focus_by, identifier = parser.extract_focus_by_and_id(parsed)
@@ -396,59 +436,192 @@ def lineage_ask_question(
                 }
             ]
         }
+
+    # Handle aggregate ranking questions on account counts
+    is_account_count_question = (
+        bool(re.search(r"\baccounts?\b", question, re.IGNORECASE))
+        and (
+            parsed.focus_metric.value == "count"
+            or bool(re.search(r"\b(count|number|how many)\b", question, re.IGNORECASE))
+        )
+    )
+    asks_extreme = (
+        parsed.ranking in {"highest", "lowest"}
+        or bool(re.search(r"\b(most|least)\b", question, re.IGNORECASE))
+    )
+    if identifier == "*" and is_account_count_question and asks_extreme:
+        is_lowest = parsed.ranking == "lowest" or bool(re.search(r"\bleast\b", question, re.IGNORECASE))
+        order = "ASC" if is_lowest else "DESC"
+
+        with sqlite3.connect(SQLITE_PATH) as con:
+            cur = con.cursor()
+            cur.execute(
+                f"""
+                SELECT COUNT(a.account_id) AS account_count
+                FROM customers c
+                LEFT JOIN accounts a ON a.customer_id = c.customer_id
+                GROUP BY c.customer_id
+                ORDER BY account_count {order}
+                LIMIT 1
+                """
+            )
+            top = cur.fetchone()
+
+            if not top:
+                raise HTTPException(status_code=404, detail="No customers/accounts found.")
+
+            best_count = int(top[0])
+
+            cur.execute(
+                """
+                SELECT c.customer_id, c.full_name, COUNT(a.account_id) AS account_count
+                FROM customers c
+                LEFT JOIN accounts a ON a.customer_id = c.customer_id
+                GROUP BY c.customer_id, c.full_name
+                HAVING COUNT(a.account_id) = ?
+                ORDER BY c.customer_id
+                """,
+                (best_count,),
+            )
+            winners = cur.fetchall()
+
+            cur.execute(
+                """
+                SELECT c.customer_id, c.full_name, COUNT(a.account_id) AS account_count
+                FROM customers c
+                LEFT JOIN accounts a ON a.customer_id = c.customer_id
+                GROUP BY c.customer_id, c.full_name
+                ORDER BY account_count DESC, c.customer_id
+                LIMIT 10
+                """
+            )
+            leaderboard = cur.fetchall()
+
+        customer_id, customer_name = winners[0][0], winners[0][1]
+        account_count = best_count
+        direction = "lowest" if is_lowest else "highest"
+        if len(winners) > 1:
+            names = ", ".join([w[1] for w in winners])
+            narrative = (
+                f"There is a tie for {direction} number of accounts at {account_count}: {names}."
+            )
+        else:
+            narrative = (
+                f"{customer_name} (customer_id {customer_id}) has the {direction} number of accounts "
+                f"with {account_count} accounts."
+            )
+
+        return {
+            "narrative": narrative,
+            "metrics": {
+                "customer_id": customer_id,
+                "account_count": int(account_count),
+                "tied_customers": len(winners),
+                "leaderboard_size": len(leaderboard),
+            },
+            "path": [],
+            "diffs": [],
+            "queries": [
+                {
+                    "type": "SQL",
+                    "query": (
+                        "SELECT c.customer_id, c.full_name, COUNT(a.account_id) AS account_count "
+                        "FROM customers c LEFT JOIN accounts a ON a.customer_id = c.customer_id "
+                        "GROUP BY c.customer_id, c.full_name "
+                        f"ORDER BY account_count {order}, c.customer_id LIMIT 1;"
+                    ),
+                },
+                {
+                    "type": "SQL",
+                    "query": (
+                        "SELECT c.customer_id, c.full_name, COUNT(a.account_id) AS account_count "
+                        "FROM customers c LEFT JOIN accounts a ON a.customer_id = c.customer_id "
+                        "GROUP BY c.customer_id, c.full_name "
+                        "ORDER BY account_count DESC, c.customer_id LIMIT 10;"
+                    ),
+                },
+            ],
+            "results": [
+                {
+                    "name": f"Customer with {direction} account count",
+                    "columns": ["customer_id", "full_name", "account_count"],
+                    "rows": [[r[0], r[1], int(r[2])] for r in winners],
+                },
+                {
+                    "name": "Top customers by account count",
+                    "columns": ["customer_id", "full_name", "account_count"],
+                    "rows": [[r[0], r[1], int(r[2])] for r in leaderboard],
+                },
+            ],
+        }
     
     # Handle aggregate/general questions (no specific identifier)
     if identifier == "*":
-        # For general balance questions, return summary statistics
+        # Use LLM SQL generator + execution as default fallback for aggregate NL questions.
+        try:
+            sql_res = sql.answer(question)
+            rows = sql_res.get("rows", [])
+            cols = sql_res.get("columns", [])
+            query_text = sql_res.get("sql", "")
+
+            if rows:
+                summary_text = nlg.summarize(
+                    question,
+                    cols,
+                    rows,
+                    flavor="SQL",
+                    source=sql_res.get("source"),
+                )
+                return {
+                    "narrative": summary_text,
+                    "metrics": {
+                        "rows_returned": len(rows),
+                        "focus": f"{parsed.investigation_type.value}:{parsed.focus_metric.value}",
+                    },
+                    "path": [],
+                    "diffs": [],
+                    "queries": [{"type": "SQL", "query": query_text}] if query_text else [],
+                    "results": [
+                        {
+                            "name": "LLM-generated aggregate answer",
+                            "columns": cols,
+                            "rows": rows,
+                        }
+                    ],
+                }
+        except Exception:
+            pass
+
+        # Last-resort fallback uses live stage summary (not hardcoded values)
+        stage_summary = lineage.stage_summary().get("stages", [])
         return {
-            "narrative": f"Analyzing {focus_by} lineage across all entities: {question}. Raw layer shows $1.5M total balance, but mart layer only $1.495M - indicating a $5K discrepancy across 12 accounts with variance up to 0.67%.",
+            "narrative": (
+                "I could not map this aggregate question to a lineage entity safely. "
+                "Showing live stage totals instead; try asking with explicit entity + metric."
+            ),
             "metrics": {
-                "raw_balance": 1500000.00,
-                "mart_balance": 1495000.00,
-                "gross_drift": -5000.00,
-                "discrepant_accounts": 12,
-                "max_variance_percent": 0.0067,
-                "total_transactions": 3456,
-                "window": "Q4 2025"
+                "stages_found": len(stage_summary),
             },
-            "path": [
+            "path": [],
+            "diffs": [],
+            "queries": [],
+            "results": [
                 {
-                    "label": "Raw Layer",
-                    "stage": "source",
-                    "balance": 1500000.00,
-                    "txn_count": 3456,
-                    "delta_balance": 0,
-                    "delta_percent": 0
-                },
-                {
-                    "label": "Staging Layer",
-                    "stage": "staging",
-                    "balance": 1498750.00,
-                    "txn_count": 3450,
-                    "delta_balance": -1250.00,
-                    "delta_percent": -0.00083
-                },
-                {
-                    "label": "Mart Layer",
-                    "stage": "mart",
-                    "balance": 1495000.00,
-                    "txn_count": 3445,
-                    "delta_balance": -3750.00,
-                    "delta_percent": -0.0025
+                    "name": "Current stage summary",
+                    "columns": ["stage_id", "label", "row_count", "total_balance", "variance_vs_prev", "issues_count"],
+                    "rows": [
+                        [
+                            s.get("stage_id"),
+                            s.get("label"),
+                            s.get("row_count"),
+                            s.get("total_balance"),
+                            s.get("variance_vs_prev"),
+                            s.get("issues_count"),
+                        ]
+                        for s in stage_summary
+                    ],
                 }
             ],
-            "diffs": [
-                {"account_id": "102", "stage": "raw", "balance": 50000.00, "mart_balance": 50000.00, "delta": 0.00, "status": "✓ Match"},
-                {"account_id": "103", "stage": "staging", "balance": 49850.00, "mart_balance": 49200.00, "delta": -650.00, "status": "⚠ Variance"},
-                {"account_id": "105", "stage": "mart", "balance": 48900.00, "mart_balance": 48150.00, "delta": -750.00, "status": "⚠ Variance"},
-                {"account_id": "107", "stage": "raw", "balance": 75000.00, "mart_balance": 74200.00, "delta": -800.00, "status": "⚠ Variance"},
-                {"account_id": "110", "stage": "staging", "balance": 62500.00, "mart_balance": 61800.00, "delta": -700.00, "status": "⚠ Variance"},
-            ],
-            "queries": [
-                "SELECT stage, SUM(balance) as total_balance, COUNT(DISTINCT account_id) as account_count, MAX(ABS(delta_pct)) as max_variance FROM account_lineage WHERE period = 'Q4_2025' GROUP BY stage ORDER BY stage;",
-                "SELECT account_id, raw_balance, mart_balance, (raw_balance - mart_balance) as drift, (100.0 * ABS(raw_balance - mart_balance) / NULLIF(raw_balance, 0)) as drift_pct FROM account_reconciliation WHERE ABS(raw_balance - mart_balance) > 0 ORDER BY drift DESC LIMIT 15;"
-            ],
-            "results": None
         }
     
     # Call the underlying reconcile endpoint with parsed parameters
