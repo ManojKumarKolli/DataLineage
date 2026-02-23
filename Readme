@@ -20,4 +20,5 @@ python load_to_neo4j.py \
 
 
 
-  uvicorn apps.graphrag_api.app:app --reload --port 8000
+To run the API server:
+uvicorn apps.graphrag_api.app:app --reload --port 8000
